@@ -1,0 +1,12 @@
+[package]
+name = "firrtl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lalrpop-util = { version = "0.19.9", features = ["lexer"] }
+logos = "0.13.0"
+
+[build-dependencies]
+lalrpop = { version = "0.19.9", features = ["lexer"] }
+
