@@ -24,264 +24,262 @@ grammar;
 // This block defines `lalrpop` terminals that map onto our own tokens. 
 // See [firrtl::lexer] for more details.
 extern { 
-	type Location = usize;
-	type Error = lexer::LexicalError;
+    type Location = usize;
+    type Error = lexer::LexicalError;
 
-	enum Tok {
-		"indent"		=> lexer::Tok::Indent,
-		"dedent"		=> lexer::Tok::Dedent,
+    enum Tok {
+        "indent"        => lexer::Tok::Indent,
+        "dedent"        => lexer::Tok::Dedent,
 
-		"<="            => lexer::Tok::LessThanEquals,
-		"\""			=> lexer::Tok::Quote,
-		"."				=> lexer::Tok::Period,
-		":"				=> lexer::Tok::Colon,
-		","				=> lexer::Tok::Comma,
-		"<"             => lexer::Tok::LessThan,
-		">"             => lexer::Tok::GreaterThan,
-		"{"             => lexer::Tok::LBracket,
-		"}"             => lexer::Tok::RBracket,
-		"["             => lexer::Tok::LSquareBracket,
-		"]"             => lexer::Tok::RSquareBracket,
-		"("             => lexer::Tok::LParen,
-		")"             => lexer::Tok::RParen,
-		"="             => lexer::Tok::Equals,
+        "<="            => lexer::Tok::LessThanEquals,
+        "\""            => lexer::Tok::Quote,
+        "."             => lexer::Tok::Period,
+        ":"             => lexer::Tok::Colon,
+        ","             => lexer::Tok::Comma,
+        "<"             => lexer::Tok::LessThan,
+        ">"             => lexer::Tok::GreaterThan,
+        "{"             => lexer::Tok::LBracket,
+        "}"             => lexer::Tok::RBracket,
+        "["             => lexer::Tok::LSquareBracket,
+        "]"             => lexer::Tok::RSquareBracket,
+        "("             => lexer::Tok::LParen,
+        ")"             => lexer::Tok::RParen,
+        "="             => lexer::Tok::Equals,
 
-		// FIXME: Add bin/oct literals
-		"dec_lit"		=> lexer::Tok::DecLit(<usize>),
-		"hex_lit"		=> lexer::Tok::HexLit(<String>),
+        // FIXME: Add bin/oct literals
+        "dec_lit"       => lexer::Tok::DecLit(<usize>),
+        "hex_lit"       => lexer::Tok::HexLit(<String>),
 
-		"circuit"		=> lexer::Tok::Circuit,
-		"module"		=> lexer::Tok::Module,
-		"ident"			=> lexer::Tok::Ident(<String>),
-		"info"			=> lexer::Tok::Info(<String>),
+        "circuit"       => lexer::Tok::Circuit,
+        "module"        => lexer::Tok::Module,
+        "ident"         => lexer::Tok::Ident(<String>),
+        "info"          => lexer::Tok::Info(<String>),
 
-		"flip"          => lexer::Tok::Flip,
-		"input"			=> lexer::Tok::Input,
-		"output"		=> lexer::Tok::Output,
+        "flip"          => lexer::Tok::Flip,
+        "input"         => lexer::Tok::Input,
+        "output"        => lexer::Tok::Output,
 
-		"clock"		    => lexer::Tok::Clock,
-		"uint"		    => lexer::Tok::UInt,
-		"sint"		    => lexer::Tok::SInt,
-		"reset"		    => lexer::Tok::Reset,
-		"asyncreset"    => lexer::Tok::AsyncReset,
-		"analog"		=> lexer::Tok::Analog,
+        "clock"         => lexer::Tok::Clock,
+        "uint"          => lexer::Tok::UInt,
+        "sint"          => lexer::Tok::SInt,
+        "reset"         => lexer::Tok::Reset,
+        "asyncreset"    => lexer::Tok::AsyncReset,
+        "analog"        => lexer::Tok::Analog,
 
-		"wire"			=> lexer::Tok::Wire,
-		"reg"			=> lexer::Tok::Reg,
-		"inst"			=> lexer::Tok::Inst,
-		"node"			=> lexer::Tok::Node,
+        "wire"          => lexer::Tok::Wire,
+        "reg"           => lexer::Tok::Reg,
+        "inst"          => lexer::Tok::Inst,
+        "node"          => lexer::Tok::Node,
 
-		"add"           => lexer::Tok::Add,
-		"sub"           => lexer::Tok::Sub,
-		"mul"           => lexer::Tok::Mul,
-		"div"           => lexer::Tok::Div,
-		"mod"           => lexer::Tok::Mod,
-		"lt"			=> lexer::Tok::Lt,
-		"leq"           => lexer::Tok::Leq,
-		"gt"			=> lexer::Tok::Gt,
-		"geq"           => lexer::Tok::Geq,
-		"eq"			=> lexer::Tok::Eq,
-		"neq"           => lexer::Tok::Neq,
-		"dshl"          => lexer::Tok::Dshl,
-		"dshr"          => lexer::Tok::Dshr,
-		"and"           => lexer::Tok::And,
-		"or"			=> lexer::Tok::Or,
-		"xor"           => lexer::Tok::Xor,
-		"cat"           => lexer::Tok::Cat,
-		"asuint"        => lexer::Tok::AsUInt,
-		"assint"        => lexer::Tok::AsSInt,
-		"asclock"       => lexer::Tok::AsClock,
-		"cvt"			=> lexer::Tok::Cvt,
-		"neg"			=> lexer::Tok::Neg,
-		"not"			=> lexer::Tok::Not,
-		"andr"			=> lexer::Tok::Andr,
-		"orr"			=> lexer::Tok::Orr,
-		"xorr"			=> lexer::Tok::Xorr,
-		"pad"			=> lexer::Tok::Pad,
-		"shl"			=> lexer::Tok::Shl,
-		"shr"			=> lexer::Tok::Shr,
-		"head"			=> lexer::Tok::Head,
-		"tail"			=> lexer::Tok::Tail,
-		"bits"			=> lexer::Tok::Bits,
+        "add"           => lexer::Tok::Add,
+        "sub"           => lexer::Tok::Sub,
+        "mul"           => lexer::Tok::Mul,
+        "div"           => lexer::Tok::Div,
+        "mod"           => lexer::Tok::Mod,
+        "lt"            => lexer::Tok::Lt,
+        "leq"           => lexer::Tok::Leq,
+        "gt"            => lexer::Tok::Gt,
+        "geq"           => lexer::Tok::Geq,
+        "eq"            => lexer::Tok::Eq,
+        "neq"           => lexer::Tok::Neq,
+        "dshl"          => lexer::Tok::Dshl,
+        "dshr"          => lexer::Tok::Dshr,
+        "and"           => lexer::Tok::And,
+        "or"            => lexer::Tok::Or,
+        "xor"           => lexer::Tok::Xor,
+        "cat"           => lexer::Tok::Cat,
+        "asuint"        => lexer::Tok::AsUInt,
+        "assint"        => lexer::Tok::AsSInt,
+        "asclock"       => lexer::Tok::AsClock,
+        "cvt"           => lexer::Tok::Cvt,
+        "neg"           => lexer::Tok::Neg,
+        "not"           => lexer::Tok::Not,
+        "andr"          => lexer::Tok::Andr,
+        "orr"           => lexer::Tok::Orr,
+        "xorr"          => lexer::Tok::Xorr,
+        "pad"           => lexer::Tok::Pad,
+        "shl"           => lexer::Tok::Shl,
+        "shr"           => lexer::Tok::Shr,
+        "head"          => lexer::Tok::Head,
+        "tail"          => lexer::Tok::Tail,
+        "bits"          => lexer::Tok::Bits,
 
-		"of"			=> lexer::Tok::Of,
-
-
-	}
+        "of"            => lexer::Tok::Of,
+    }
 }
 
 // -------------------------------------------------------------------------
 // Types
 
 pub Field: Field = {
-	<id:"ident"> ":" <ty: Type> => {
-		Field { flipped: false, id, ty }
-	},
-	"flip" <id:"ident"> ":" <ty: Type> => {
-		Field { flipped: true, id, ty }
-	},
+    <id:"ident"> ":" <ty: Type> => {
+        Field { flipped: false, id, ty }
+    },
+    "flip" <id:"ident"> ":" <ty: Type> => {
+        Field { flipped: true, id, ty }
+    },
 }
 
 pub AggregateType: Type = {
-	// A bundle type
-	"{" <f: Field> <mut fields:("," <Field>)*> "}" => {
-		let mut res = Vec::new();
-		res.push(f);
-		res.append(&mut fields);
-		Type::Bundle(res)
-	},
-	// A vector type
-	<ty: Type> "[" <size:"dec_lit"> "]" => {
-		Type::Vector(Box::new(ty), size)
-	},
+    // A bundle type
+    "{" <f: Field> <mut fields:("," <Field>)*> "}" => {
+        let mut res = Vec::new();
+        res.push(f);
+        res.append(&mut fields);
+        Type::Bundle(res)
+    },
+    // A vector type
+    <ty: Type> "[" <size:"dec_lit"> "]" => {
+        Type::Vector(Box::new(ty), size)
+    },
 }
 
 pub GroundType: Type = {
-	"clock"      => Type::Clock,
-	"reset"      => Type::Reset,
-	"asyncreset" => Type::AsyncReset,
-	"uint" "<" <bits:"dec_lit"> ">"   => Type::UInt(bits),
-	"sint" "<" <bits:"dec_lit"> ">"   => Type::SInt(bits),
-	"analog" "<" <bits:"dec_lit"> ">" => Type::Analog(bits),
+    "clock"      => Type::Clock,
+    "reset"      => Type::Reset,
+    "asyncreset" => Type::AsyncReset,
+    "uint" "<" <bits:"dec_lit"> ">"   => Type::UInt(bits),
+    "sint" "<" <bits:"dec_lit"> ">"   => Type::SInt(bits),
+    "analog" "<" <bits:"dec_lit"> ">" => Type::Analog(bits),
 }
 
 // FIXME: Missing the 'const' keyword? Type references?
 pub Type: Type = {
-	<gt: GroundType>    => gt,
-	<at: AggregateType> => at,
+    <gt: GroundType>    => gt,
+    <at: AggregateType> => at,
 }
 
 // -------------------------------------------------------------------------
 
 pub Circuit: Circuit = {
-	"circuit" <id:"ident"> ":" "indent" <modules:Module*> => {
-		Circuit { id, modules }
-	},
+    "circuit" <id:"ident"> ":" "indent" <modules:Module*> => {
+        Circuit { id, modules }
+    },
 }
 
 
 pub Module: Module = {
-	"module" <id:"ident"> ":" "indent" <ports:Port*> <statements:Statement*> "dedent" => {
-		Module { id, ports, statements }
-	}
+    "module" <id:"ident"> ":" "indent" <ports:Port*> <statements:Statement*> "dedent" => {
+        Module { id, ports, statements }
+    }
 }
 pub Direction: Direction = {
-	"input" => Direction::Input,
-	"output" => Direction::Output,
+    "input" => Direction::Input,
+    "output" => Direction::Output,
 }
 
 pub Port: Port = {
-	<dir:Direction> <id:"ident"> ":" <ty:Type> <info:"info"?> => {
-		Port { id, dir, ty }
-	}
+    <dir:Direction> <id:"ident"> ":" <ty:Type> <info:"info"?> => {
+        Port { id, dir, ty }
+    }
 }
 
 pub Statement: Statement = {
-	"wire" <id:"ident"> ":" <ty: Type> <info:"info"?> => {
-		Statement::Wire { id, ty }
-	},
-	"node" <id:"ident"> "=" <expr:Expr> <info:"info"?> => {
-		Statement::Node { id, expr }
-	},
-	"inst" <id:"ident"> "of" <module:"ident"> <info:"info"?> => {
-		Statement::Inst { id, module }
-	},
+    "wire" <id:"ident"> ":" <ty: Type> <info:"info"?> => {
+        Statement::Wire { id, ty }
+    },
+    "node" <id:"ident"> "=" <expr:Expr> <info:"info"?> => {
+        Statement::Node { id, expr }
+    },
+    "inst" <id:"ident"> "of" <module:"ident"> <info:"info"?> => {
+        Statement::Inst { id, module }
+    },
 
-	// FIXME: Need to add a bunch of statements
-	//"reg" id ":" type expr ["with" ":" "(" "reset" "=>" "(" expr "," expr ")" ")"] [ info ]
-	//"reg" <id:"ident"> ":" <ty: Type>
+    // FIXME: Need to add a bunch of statements
+    //"reg" id ":" type expr ["with" ":" "(" "reset" "=>" "(" expr "," expr ")" ")"] [ info ]
+    //"reg" <id:"ident"> ":" <ty: Type>
 
-	<r:Reference> "<=" <e:Expr> <info:"info"?> => {
-		Statement::Connect { lhs: r, rhs: e }
-	},
+    <r:Reference> "<=" <e:Expr> <info:"info"?> => {
+        Statement::Connect { lhs: r, rhs: e }
+    },
 }
 
 // FIXME: Need to add hex/oct/bin literals
 pub Literal: Literal = {
-	<v:"dec_lit"> => { Literal::Dec(v) },
-	<s:"hex_lit"> => { Literal::Hex(s) },
+    <v:"dec_lit"> => { Literal::Dec(v) },
+    <s:"hex_lit"> => { Literal::Hex(s) },
 }
 
 pub StaticReference: StaticReference = {
-	<sr:StaticReference> "." <id:"ident"> => {
-		StaticReference::Subfield(Box::new(sr), id)
-	},
+    <sr:StaticReference> "." <id:"ident"> => {
+        StaticReference::Subfield(Box::new(sr), id)
+    },
 
-	// An identifier
-	<id:"ident"> => { StaticReference::Id(id) },
+    // An identifier
+    <id:"ident"> => { StaticReference::Id(id) },
 
-	// A subfield
-	//<r:Self> "." <id:"ident> => { 
-	//	StaticReference::Subfield(r, id)
-	//},
+    // A subfield
+    //<r:Self> "." <id:"ident> => { 
+    //    StaticReference::Subfield(r, id)
+    //},
 }
 
 pub Reference: Reference = {
-	<sr:StaticReference> => { Reference::Static(sr) },
+    <sr:StaticReference> => { Reference::Static(sr) },
 }
 
 pub Expr: Expr = {
-	"uint" "<" <width:"dec_lit"> ">" "(" <value:Literal> ")" => {
-		Expr::LiteralUInt { width, value }
-	},
-	"sint" "<" <width:"dec_lit"> ">" "(" <value:Literal> ")" => {
-		Expr::LiteralSInt { width, value }
-	},
-	<r:Reference> => { Expr::Reference(Box::new(r)) },
-	<p:PrimOp> => { Expr::PrimOp(p) },
+    "uint" "<" <width:"dec_lit"> ">" "(" <value:Literal> ")" => {
+        Expr::LiteralUInt { width, value }
+    },
+    "sint" "<" <width:"dec_lit"> ">" "(" <value:Literal> ")" => {
+        Expr::LiteralSInt { width, value }
+    },
+    <r:Reference> => { Expr::Reference(Box::new(r)) },
+    <p:PrimOp> => { Expr::PrimOp(p) },
 }
 
 pub PrimOp: PrimOp = {
-	PrimOp2Expr,
-	PrimOp1Expr,
-	PrimOp1Expr1Int,
-	PrimOp1Expr2Int,
+    PrimOp2Expr,
+    PrimOp1Expr,
+    PrimOp1Expr1Int,
+    PrimOp1Expr2Int,
 }
 
 pub PrimOp2Expr: PrimOp = {
-	"add"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Add(Box::new(e1), Box::new(e2)) },
-	"sub"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Sub(Box::new(e1), Box::new(e2)) },
-	"mul"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Mul(Box::new(e1), Box::new(e2)) },
-	"div"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Div(Box::new(e1), Box::new(e2)) },
-	"mod"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Mod(Box::new(e1), Box::new(e2)) },
-	"lt"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Lt(Box::new(e1), Box::new(e2)) },
-	"leq"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Leq(Box::new(e1), Box::new(e2)) },
-	"gt"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Gt(Box::new(e1), Box::new(e2)) },
-	"geq"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Geq(Box::new(e1), Box::new(e2)) },
-	"eq"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Eq(Box::new(e1), Box::new(e2)) },
-	"neq"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Neq(Box::new(e1), Box::new(e2)) },
-	"dshl" "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Dshl(Box::new(e1), Box::new(e2)) },
-	"dshr" "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Dshr(Box::new(e1), Box::new(e2)) },
-	"and"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::And(Box::new(e1), Box::new(e2)) },
-	"or"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Or(Box::new(e1), Box::new(e2)) },
-	"xor"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Xor(Box::new(e1), Box::new(e2)) },
-	"cat"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Cat(Box::new(e1), Box::new(e2)) },
+    "add"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Add(Box::new(e1), Box::new(e2)) },
+    "sub"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Sub(Box::new(e1), Box::new(e2)) },
+    "mul"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Mul(Box::new(e1), Box::new(e2)) },
+    "div"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Div(Box::new(e1), Box::new(e2)) },
+    "mod"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Mod(Box::new(e1), Box::new(e2)) },
+    "lt"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Lt(Box::new(e1), Box::new(e2)) },
+    "leq"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Leq(Box::new(e1), Box::new(e2)) },
+    "gt"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Gt(Box::new(e1), Box::new(e2)) },
+    "geq"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Geq(Box::new(e1), Box::new(e2)) },
+    "eq"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Eq(Box::new(e1), Box::new(e2)) },
+    "neq"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Neq(Box::new(e1), Box::new(e2)) },
+    "dshl" "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Dshl(Box::new(e1), Box::new(e2)) },
+    "dshr" "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Dshr(Box::new(e1), Box::new(e2)) },
+    "and"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::And(Box::new(e1), Box::new(e2)) },
+    "or"   "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Or(Box::new(e1), Box::new(e2)) },
+    "xor"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Xor(Box::new(e1), Box::new(e2)) },
+    "cat"  "(" <e1:Expr> "," <e2:Expr> ")" => { PrimOp::Cat(Box::new(e1), Box::new(e2)) },
 }
 
 pub PrimOp1Expr: PrimOp = {
-	"asuint"  "(" <e1:Expr> ")" => { PrimOp::AsUInt(Box::new(e1)) },
-	"assint"  "(" <e1:Expr> ")" => { PrimOp::AsSInt(Box::new(e1)) },
-	"asclock" "(" <e1:Expr> ")" => { PrimOp::AsClock(Box::new(e1)) },
-	"cvt"     "(" <e1:Expr> ")" => { PrimOp::Cvt(Box::new(e1)) },
-	"neg"     "(" <e1:Expr> ")" => { PrimOp::Neg(Box::new(e1)) },
-	"not"     "(" <e1:Expr> ")" => { PrimOp::Not(Box::new(e1)) },
-	"andr"    "(" <e1:Expr> ")" => { PrimOp::Andr(Box::new(e1)) },
-	"orr"     "(" <e1:Expr> ")" => { PrimOp::Orr(Box::new(e1)) },
-	"xorr"    "(" <e1:Expr> ")" => { PrimOp::Xorr(Box::new(e1)) },
+    "asuint"  "(" <e1:Expr> ")" => { PrimOp::AsUInt(Box::new(e1)) },
+    "assint"  "(" <e1:Expr> ")" => { PrimOp::AsSInt(Box::new(e1)) },
+    "asclock" "(" <e1:Expr> ")" => { PrimOp::AsClock(Box::new(e1)) },
+    "cvt"     "(" <e1:Expr> ")" => { PrimOp::Cvt(Box::new(e1)) },
+    "neg"     "(" <e1:Expr> ")" => { PrimOp::Neg(Box::new(e1)) },
+    "not"     "(" <e1:Expr> ")" => { PrimOp::Not(Box::new(e1)) },
+    "andr"    "(" <e1:Expr> ")" => { PrimOp::Andr(Box::new(e1)) },
+    "orr"     "(" <e1:Expr> ")" => { PrimOp::Orr(Box::new(e1)) },
+    "xorr"    "(" <e1:Expr> ")" => { PrimOp::Xorr(Box::new(e1)) },
 }
 
 pub PrimOp1Expr1Int: PrimOp = {
-	"pad"  "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Pad(Box::new(e1), val) },
-	"shl"  "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Shl(Box::new(e1), val) },
-	"shr"  "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Shr(Box::new(e1), val) },
-	"head" "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Head(Box::new(e1), val) },
-	"tail" "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Tail(Box::new(e1), val) },
+    "pad"  "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Pad(Box::new(e1), val) },
+    "shl"  "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Shl(Box::new(e1), val) },
+    "shr"  "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Shr(Box::new(e1), val) },
+    "head" "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Head(Box::new(e1), val) },
+    "tail" "(" <e1:Expr> "," <val:Literal> ")" => { PrimOp::Tail(Box::new(e1), val) },
 }
 
 pub PrimOp1Expr2Int: PrimOp = {
-	"bits" "(" <e1:Expr> "," <v1:Literal> "," <v2:Literal> ")" => {
-		PrimOp::Bits(Box::new(e1), v1, v2)
-	}
+    "bits" "(" <e1:Expr> "," <v1:Literal> "," <v2:Literal> ")" => {
+        PrimOp::Bits(Box::new(e1), v1, v2)
+    }
 }
 
 
