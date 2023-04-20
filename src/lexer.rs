@@ -6,121 +6,6 @@ use std::ops::Range;
 use std::collections::*;
 use std::str::FromStr;
 
-//#[allow(non_camel_case_types)]
-//pub enum Keyword {
-//    Analog,
-//    AsyncReset,
-//    Clock,
-//    FIRRTL,
-//    Fixed,
-//    Probe,
-//    RWProbe,
-//    Reset,
-//    SInt,
-//    UInt,
-//    attach,
-//    circuit,
-//    cmem,
-//    define,
-//    defname,
-//    intrinsic,
-//    r#else,
-//    extmodule,
-//    intmodule,
-//    flip,
-//    infer,
-//    input,
-//    inst,
-//    invalid,
-//    is,
-//    mem,
-//    module,
-//    mport,
-//    new,
-//    node,
-//    of,
-//    old,
-//    output,
-//    parameter,
-//    rdwr,
-//    read,
-//    r#ref,
-//    reg,
-//    reset,
-//    skip,
-//    smem,
-//    undefined,
-//    version,
-//    when,
-//    wire,
-//    with,
-//    write,
-//}
-//
-//#[allow(non_camel_case_types)]
-//pub enum LpKeyword {
-//    printf,
-//    stop,
-//    assert,
-//    assume,
-//    cover,
-//    force,
-//    force_initial,
-//    release,
-//    release_initial,
-//    read,
-//    probe,
-//    rwprobe,
-//}
-//
-//pub enum Punctuation {
-//    Period,
-//    Colon,
-//    Question,
-//    LParen,
-//    RParen,
-//    LBrace,
-//    RBrace,
-//    LSquare,
-//    RSquare,
-//    Less,
-//    LessEqual,
-//    LessMinus,
-//    Greater,
-//    Equal,
-//    EqualGreater
-//}
-//
-//
-//pub enum Token<'input> {
-//    Ident(&'input str),
-//    Literal(&'input str),
-//    Keyword(Keyword),
-//    LpKeyword(LpKeyword),
-//}
-//
-//pub struct Lexer<'input> {
-//    input: &'input str,
-//}
-//impl <'input> Lexer<'input> {
-//
-//    /// Create a new [Lexer] for the provided input.
-//    pub fn new(input: &'input str) -> Self {
-//        Self { input }
-//    }
-//
-//    pub fn lex(&self) {
-//        let chars: Vec<char> = self.input.chars().collect();
-//        let mut cur = 0;
-//        loop {
-//            match chars[cur] {
-//                ' ' | '\t' | '\n' | '\r' | ',' => continue,
-//                _ => unimplemented!("{}", chars[cur]),
-//            }
-//        }
-//    }
-//}
-
 #[derive(Error, Debug, Diagnostic)]
 #[error("Lexer error")]
 pub struct LexerError {
@@ -130,8 +15,9 @@ pub struct LexerError {
     pub span: SourceSpan,
 }
 
+// NOTE: This skips horizontal whitespace and comments
 #[derive(Logos, Debug, PartialEq)]
-#[logos(skip r"[ \t\n\r,]+")]
+#[logos(skip r"[ \n\r,]+")]
 #[logos(skip r";.*\n")]
 pub enum LogosToken<'src> {
     #[regex("[a-zA-Z_][a-zA-Z0-9_$-]*", |lex| lex.slice())]
@@ -149,12 +35,23 @@ pub enum LogosToken<'src> {
     #[regex(r#"@\[([^'\\\[\]]|\\t|\\u|\\n|\\|\\')*\]"#, |lex| lex.slice())]
     FileInfo(&'src str),
 
+    #[regex(r"<[0-9][0-9]*>")]
+    Width(&'src str),
+
     //#[regex("[a-zA-Z]")] Alpha,
     #[regex("[0-9]+", |lex| lex.slice())]
     LiteralInt(&'src str),
 
     #[regex("[+-][0-9]+", |lex| lex.slice())]
     LiteralSignedInt(&'src str),
+
+    #[regex(r"[0-9]\.[0-9]\.[0-9]", |lex| lex.slice())]
+    LiteralVersion(&'src str),
+
+    // NOTE: The only relevant horizontal whitespace occurs after a newline. 
+    // This matches a newline, but only returns the whitespace.
+    #[regex(r"[\n\r\v\f]([ \t,])+", |lex| &lex.slice()[1..] )]
+    WhitespaceH(&'src str),
 
     #[token(".")]  Period,
     #[token(":")]  Colon,
@@ -173,7 +70,7 @@ pub enum LogosToken<'src> {
     #[token("=>")] EqualGreater,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FirrtlPunctuation {
     Period, Colon, Question, LParen, RParen, LBrace, RBrace, LSquare, RSquare,
     Less, LessEqual, LessMinus, Greater, Equal, EqualGreater
@@ -201,7 +98,7 @@ impl <'src> FirrtlPunctuation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FirrtlLiteral<'src> {
     Int(&'src str),
     SignedInt(&'src str),
@@ -211,7 +108,7 @@ pub enum FirrtlLiteral<'src> {
     RawString(&'src str),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FirrtlToken<'src> {
     /// Identifier/keyword
     IdentKw(&'src str),
@@ -221,6 +118,23 @@ pub enum FirrtlToken<'src> {
     Punctuation(FirrtlPunctuation),
     /// File info
     FileInfo(&'src str),
+    /// Type width (in bits)
+    TypeWidth(usize),
+    /// Horizontal whitespace
+    WhitespaceH(usize),
+    /// End-of-file
+    EOF, 
+}
+impl <'src> FirrtlToken<'src> {
+    pub fn is_identkw(&self) -> bool { 
+        matches!(self, Self::IdentKw(_)) 
+    }
+    pub fn is_punctuation(&self, p: FirrtlPunctuation) -> bool { 
+        matches!(self, Self::Punctuation(p)) 
+    }
+    pub fn is_whitespace(&self) -> bool { 
+        matches!(self, Self::WhitespaceH(_)) 
+    }
 }
 
 
@@ -243,35 +157,38 @@ impl <'src> FirrtlLexer<'src> {
         }
     }
 
-    fn firrtl_lex(&mut self, cur: LogosToken<'src>) -> Option<Result<FirrtlToken<'src>>> {
+    fn firrtl_lex(&mut self, cur: LogosToken<'src>) -> FirrtlToken<'src>
+    {
         println!("Start at {:?}, {:?}", cur, self.llexer.span());
-        loop { 
-            match cur { 
-                LogosToken::IdentKw(s)  => {
-                    return Some(Ok(FirrtlToken::IdentKw(s)));
-                },
-                LogosToken::FileInfo(s) => {
-                    return Some(Ok(FirrtlToken::FileInfo(s)));
-                },
-                LogosToken::LiteralInt(s) => {
-                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::Int(s))));
-                },
-                LogosToken::LiteralSignedInt(s) => {
-                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::SignedInt(s))));
-                },
-                LogosToken::StringLiteral(s) => {
-                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::String(s))));
-                },
-                LogosToken::RawString(s) => {
-                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::RawString(s))));
-                },
-                lt if FirrtlPunctuation::from_lt(&lt).is_some() => {
-                    return Some(Ok(FirrtlToken::Punctuation(
-                        FirrtlPunctuation::from_lt(&lt).unwrap()
-                    )))
-                },
-                _ => unimplemented!("{:?}", cur),
-            }
+        match cur { 
+            LogosToken::Width(s) => {
+                FirrtlToken::TypeWidth(s[1..s.len()-1].parse().unwrap())
+            },
+            LogosToken::WhitespaceH(s) => FirrtlToken::WhitespaceH(s.len()),
+            LogosToken::IdentKw(s)  => FirrtlToken::IdentKw(s),
+            LogosToken::FileInfo(s) => FirrtlToken::FileInfo(s),
+            LogosToken::LiteralInt(s) => {
+                FirrtlToken::Literal(FirrtlLiteral::Int(s))
+            },
+            LogosToken::LiteralSignedInt(s) => {
+                FirrtlToken::Literal(FirrtlLiteral::SignedInt(s))
+            },
+            LogosToken::StringLiteral(s) => {
+                FirrtlToken::Literal(FirrtlLiteral::String(s))
+            },
+            LogosToken::RawString(s) => {
+                FirrtlToken::Literal(FirrtlLiteral::RawString(s))
+            },
+            LogosToken::LiteralVersion(s) => {
+                FirrtlToken::Literal(FirrtlLiteral::Version(s))
+            },
+
+            lt if FirrtlPunctuation::from_lt(&lt).is_some() => {
+                FirrtlToken::Punctuation(
+                    FirrtlPunctuation::from_lt(&lt).unwrap()
+                )
+            },
+            _ => unimplemented!("{:?}", cur),
         }
     }
 
@@ -280,11 +197,13 @@ impl <'src> FirrtlLexer<'src> {
 impl <'src> Iterator for FirrtlLexer<'src> {
     type Item = Result<FirrtlToken<'src>>;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        // FIXME: Probably want to return span info too?
         let span = self.llexer.span();
-
         if let Some(ltok_res) = self.llexer.next() {
             match ltok_res {
-                // Fancy spanned errors via [miette]
+                // Convert from [LogosToken] into [FirrtlToken]
+                Ok(ltok) => Some(Ok(self.firrtl_lex(ltok))),
+                // Emit fancy spanned errors with [miette]
                 Err(ltok_err) => {
                     let src = String::from_str(self.src).unwrap();
                     let rsrc = NamedSource::new(self.filename.as_str(), src);
@@ -292,47 +211,11 @@ impl <'src> Iterator for FirrtlLexer<'src> {
                         src: rsrc, span: (span.start, span.len()).into()
                     }.into()));
                 },
-                Ok(ltok) => self.firrtl_lex(ltok),
             }
-
         } else { 
             None
         }
-
     }
 }
 
-
-//    pub fn lex_from_file(filename: &str) -> Result<()> {
-//        let s = Self::string_from_file(filename);
-//        let input = s.clone();
-//
-//        // Use [logos] to create a stream of tokens
-//        let mut lexer = LogosToken::lexer(&input);
-//        return lexer;
-//
-//        loop { 
-//            let span = lexer.span();
-//            match lexer.next() {
-//                Some(t) => match t {
-//                    Ok(t) => { 
-//                        println!("{:?} {:?}", t, span);
-//                    },
-//                    Err(e) => {
-//                        Err(LexerError {
-//                            src: NamedSource::new("parse-basic.fir", s.clone()),
-//                            span: (span.start, span.len()).into(),
-//                        })?;
-//                    },
-//                },
-//                None => break,
-//            }
-//        }
-//        Ok(())
-//
-//
-//
-//    }
-//
-//}
 
