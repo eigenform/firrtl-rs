@@ -4,16 +4,11 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-
-#[macro_use]
-extern crate lalrpop_util;
-lalrpop_mod!(pub firrtl);
-
 pub mod ast;
 pub mod lexer;
 
 /// Read a file into a [String].
-fn read_file(filename: String) -> String {
+fn read_file(filename: &str) -> String {
     use std::fs::File;
     use std::io::*;
 
@@ -27,21 +22,48 @@ fn read_file(filename: String) -> String {
 mod test {
     use super::*;
     use crate::lexer::*;
-
-    //#[test]
-    //fn test_lalrpop() {
-    //    let s = read_file("chisel-tests/firrtl/MyNestedModule.fir".to_string());
-    //    let lexer = Lexer::new(&s);
-    //    let res = firrtl::CircuitParser::new().parse(lexer).unwrap();
-    //    println!("{:?}", res);
-    //}
+    use miette::{ SourceSpan, SourceOffset, NamedSource, Result };
 
     #[test]
-    fn test_lalrpop_2() {
-        let s = read_file("chisel-tests/firrtl/GCD.fir".to_string());
-        let lexer = Lexer::new(&s);
-        let res = firrtl::CircuitParser::new().parse(lexer).unwrap();
-        println!("{:?}", res);
+    fn firrtl_parse_test() {
+
+        let src = read_file("parse-basic.fir");
+        let lexer = FirrtlLexer::new("parse-basic.fir", &src);
+
+        for t in lexer {
+            match t {
+                Ok(ft) => {
+                    println!("{:?}", ft);
+                },
+                Err(e) => {
+                    panic!("{:?}", e);
+                },
+            }
+        }
+
+
+        //let s = read_file("parse-basic.fir".to_string());
+        //let input = s.clone();
+        //let mut lexer = Token::lexer(&input);
+        //loop { 
+        //    let span = lexer.span();
+        //    match lexer.next() {
+        //        Some(t) => match t {
+        //            Ok(t) => { 
+        //                println!("{:?} {:?}", t, span);
+        //            },
+        //            Err(e) => {
+        //                Err(LexerError {
+        //                    src: NamedSource::new("parse-basic.fir", s.clone()),
+        //                    span: (span.start, span.len()).into(),
+        //                })?;
+        //            },
+        //        },
+        //        None => break,
+        //    }
+        //}
+        //Ok(())
+
     }
 
 }

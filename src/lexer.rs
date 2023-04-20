@@ -1,267 +1,338 @@
 
-use logos::{ Logos, SpannedIter };
+pub use logos::Logos;
+use miette::{ Diagnostic, SourceSpan, SourceOffset, NamedSource, Result };
+use thiserror::Error;
 use std::ops::Range;
 use std::collections::*;
+use std::str::FromStr;
 
-pub type Spanned<Tok, Loc, Error> = Result<(Loc, Tok, Loc), Error>;
+//#[allow(non_camel_case_types)]
+//pub enum Keyword {
+//    Analog,
+//    AsyncReset,
+//    Clock,
+//    FIRRTL,
+//    Fixed,
+//    Probe,
+//    RWProbe,
+//    Reset,
+//    SInt,
+//    UInt,
+//    attach,
+//    circuit,
+//    cmem,
+//    define,
+//    defname,
+//    intrinsic,
+//    r#else,
+//    extmodule,
+//    intmodule,
+//    flip,
+//    infer,
+//    input,
+//    inst,
+//    invalid,
+//    is,
+//    mem,
+//    module,
+//    mport,
+//    new,
+//    node,
+//    of,
+//    old,
+//    output,
+//    parameter,
+//    rdwr,
+//    read,
+//    r#ref,
+//    reg,
+//    reset,
+//    skip,
+//    smem,
+//    undefined,
+//    version,
+//    when,
+//    wire,
+//    with,
+//    write,
+//}
+//
+//#[allow(non_camel_case_types)]
+//pub enum LpKeyword {
+//    printf,
+//    stop,
+//    assert,
+//    assume,
+//    cover,
+//    force,
+//    force_initial,
+//    release,
+//    release_initial,
+//    read,
+//    probe,
+//    rwprobe,
+//}
+//
+//pub enum Punctuation {
+//    Period,
+//    Colon,
+//    Question,
+//    LParen,
+//    RParen,
+//    LBrace,
+//    RBrace,
+//    LSquare,
+//    RSquare,
+//    Less,
+//    LessEqual,
+//    LessMinus,
+//    Greater,
+//    Equal,
+//    EqualGreater
+//}
+//
+//
+//pub enum Token<'input> {
+//    Ident(&'input str),
+//    Literal(&'input str),
+//    Keyword(Keyword),
+//    LpKeyword(LpKeyword),
+//}
+//
+//pub struct Lexer<'input> {
+//    input: &'input str,
+//}
+//impl <'input> Lexer<'input> {
+//
+//    /// Create a new [Lexer] for the provided input.
+//    pub fn new(input: &'input str) -> Self {
+//        Self { input }
+//    }
+//
+//    pub fn lex(&self) {
+//        let chars: Vec<char> = self.input.chars().collect();
+//        let mut cur = 0;
+//        loop {
+//            match chars[cur] {
+//                ' ' | '\t' | '\n' | '\r' | ',' => continue,
+//                _ => unimplemented!("{}", chars[cur]),
+//            }
+//        }
+//    }
+//}
+
+#[derive(Error, Debug, Diagnostic)]
+#[error("Lexer error")]
+pub struct LexerError {
+    #[source_code]
+    pub src: NamedSource,
+    #[label("Somewhere around here ...")]
+    pub span: SourceSpan,
+}
+
+#[derive(Logos, Debug, PartialEq)]
+#[logos(skip r"[ \t\n\r,]+")]
+#[logos(skip r";.*\n")]
+pub enum LogosToken<'src> {
+    #[regex("[a-zA-Z_][a-zA-Z0-9_$-]*", |lex| lex.slice())]
+    IdentKw(&'src str),
+
+    #[regex(r#""([^"\\]|\\t|\\u|\\n|\\")*""#, |lex| lex.slice())]
+    StringLiteral(&'src str),
+
+    #[regex(r#"'([^'\\]|\\t|\\u|\\n|\\|\\')*'"#, |lex| lex.slice())]
+    RawString(&'src str),
+
+    #[regex(r#"%\[([^'\\\[\]]|\\t|\\u|\\n|\\|\\')*\]"#, |lex| lex.slice())]
+    InlineNotation(&'src str),
+
+    #[regex(r#"@\[([^'\\\[\]]|\\t|\\u|\\n|\\|\\')*\]"#, |lex| lex.slice())]
+    FileInfo(&'src str),
+
+    //#[regex("[a-zA-Z]")] Alpha,
+    #[regex("[0-9]+", |lex| lex.slice())]
+    LiteralInt(&'src str),
+
+    #[regex("[+-][0-9]+", |lex| lex.slice())]
+    LiteralSignedInt(&'src str),
+
+    #[token(".")]  Period,
+    #[token(":")]  Colon,
+    #[token("?")]  Question,
+    #[token("(")]  LParen,
+    #[token(")")]  RParen,
+    #[token("{")]  LBrace,
+    #[token("}")]  RBrace,
+    #[token("[")]  LSquare,
+    #[token("]")]  RSquare,
+    #[token("<")]  Less,
+    #[token("<-")] LessMinus,
+    #[token("<=")] LessEqual,
+    #[token(">")]  Greater,
+    #[token("=")]  Equal,
+    #[token("=>")] EqualGreater,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FirrtlPunctuation {
+    Period, Colon, Question, LParen, RParen, LBrace, RBrace, LSquare, RSquare,
+    Less, LessEqual, LessMinus, Greater, Equal, EqualGreater
+}
+impl <'src> FirrtlPunctuation {
+    fn from_lt(t: &LogosToken<'src>) -> Option<Self> { 
+        match t {
+            LogosToken::Period       => Some(Self::Period),
+            LogosToken::Colon        => Some(Self::Colon),
+            LogosToken::Question     => Some(Self::Question),
+            LogosToken::LParen       => Some(Self::LParen),
+            LogosToken::RParen       => Some(Self::RParen),
+            LogosToken::LBrace       => Some(Self::LBrace),
+            LogosToken::RBrace       => Some(Self::RBrace),
+            LogosToken::LSquare      => Some(Self::LSquare),
+            LogosToken::RSquare      => Some(Self::RSquare),
+            LogosToken::Less         => Some(Self::Less),
+            LogosToken::LessEqual    => Some(Self::LessEqual),
+            LogosToken::LessMinus    => Some(Self::LessMinus),
+            LogosToken::Greater      => Some(Self::Greater),
+            LogosToken::Equal        => Some(Self::Equal),
+            LogosToken::EqualGreater => Some(Self::EqualGreater),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub enum LexicalError { InvalidToken }
-
-/// Datatype for converting FIRRTL input into tokens. 
-///
-/// FIXME: This is probably very slow.
-///
-pub struct Lexer<'input> {
-    processed: VecDeque<(Result<Tok, ()>, Range<usize>)>,
-    token_stream: SpannedIter<'input, Tok>,
+pub enum FirrtlLiteral<'src> {
+    Int(&'src str),
+    SignedInt(&'src str),
+    Float(&'src str),
+    Version(&'src str),
+    String(&'src str),
+    RawString(&'src str),
 }
-impl<'input> Lexer<'input> {
-    pub fn new(input: &'input str) -> Self {
+
+#[derive(Debug)]
+pub enum FirrtlToken<'src> {
+    /// Identifier/keyword
+    IdentKw(&'src str),
+    /// Literals
+    Literal(FirrtlLiteral<'src>),
+    /// Punctuation
+    Punctuation(FirrtlPunctuation),
+    /// File info
+    FileInfo(&'src str),
+}
+
+
+
+
+pub struct FirrtlLexer<'src> {
+    /// The input string
+    src: &'src str,
+
+    filename: String,
+    /// A stream of [LogosToken] 
+    llexer: logos::Lexer<'src, LogosToken<'src>>,
+}
+impl <'src> FirrtlLexer<'src> {
+    pub fn new(filename: &str, src: &'src str) -> Self { 
         Self { 
-            processed: Self::preprocess(input),
-            token_stream: Tok::lexer(input).spanned(),
+            src, 
+            filename: filename.to_string(),
+            llexer: LogosToken::lexer(&src),
         }
-  }
-
-    /// Pre-process a FIRRTL file line-by-line. 
-    fn preprocess(input: &'input str) 
-        -> VecDeque<(Result<Tok, ()>, Range<usize>)> 
-    {
-        let mut res: VecDeque<(Result<Tok, ()>, Range<usize>)> = VecDeque::new();
-        let mut file_cur = 0;
-        let mut indent_lvl = 0;
-        for (lnum, line) in input.split("\n").enumerate() {
-            // The length of this line, including the '\n'
-            let line_len = line.len() + 1;
-
-            // Empty lines are irrelevant for our purposes.
-            // Just eat the newline. 
-            if line == "" { 
-                file_cur += line_len;
-                continue; 
-            }
-
-            // Emit [Tok::Indent] and [Tok::Dedent].
-            let idt = line.chars().take_while(|c| *c == ' ').count();
-            if idt > indent_lvl {
-                res.push_back((Ok(Tok::Indent), file_cur-1..file_cur));
-                indent_lvl = idt;
-            }
-            else if idt < indent_lvl {
-                res.push_back((Ok(Tok::Dedent), file_cur-1..file_cur));
-                indent_lvl = idt;
-            }
-
-            for (token, line_span) in Tok::lexer(line.trim_start()).spanned() {
-              let span = Range { 
-                  start: (line_span.start + idt + file_cur),
-                  end:   (line_span.end + idt + file_cur)
-              };
-              res.push_back((token, span));
-            }
-            file_cur += line_len;
-        }
-
-        // Manually emit [Tok::Dedent] to end the last module
-        res.push_back((Ok(Tok::Dedent), file_cur-1..file_cur));
-        for t in &res { println!("{:?}", t); }
-        res
     }
-}
 
-impl<'input> Iterator for Lexer<'input> {
-  type Item = Spanned<Tok, usize, LexicalError>;
-  fn next(&mut self) -> Option<Self::Item> {
-    match self.processed.pop_front() {
-        Some((result, span)) => { 
-            match result {
-                Ok(t) => Some(Ok((span.start, t, span.end))),
-                Err(e) => {
-                    println!("Lexer error: {:?}", e);
-                    Some(Err(LexicalError::InvalidToken))
+    fn firrtl_lex(&mut self, cur: LogosToken<'src>) -> Option<Result<FirrtlToken<'src>>> {
+        println!("Start at {:?}, {:?}", cur, self.llexer.span());
+        loop { 
+            match cur { 
+                LogosToken::IdentKw(s)  => {
+                    return Some(Ok(FirrtlToken::IdentKw(s)));
                 },
+                LogosToken::FileInfo(s) => {
+                    return Some(Ok(FirrtlToken::FileInfo(s)));
+                },
+                LogosToken::LiteralInt(s) => {
+                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::Int(s))));
+                },
+                LogosToken::LiteralSignedInt(s) => {
+                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::SignedInt(s))));
+                },
+                LogosToken::StringLiteral(s) => {
+                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::String(s))));
+                },
+                LogosToken::RawString(s) => {
+                    return Some(Ok(FirrtlToken::Literal(FirrtlLiteral::RawString(s))));
+                },
+                lt if FirrtlPunctuation::from_lt(&lt).is_some() => {
+                    return Some(Ok(FirrtlToken::Punctuation(
+                        FirrtlPunctuation::from_lt(&lt).unwrap()
+                    )))
+                },
+                _ => unimplemented!("{:?}", cur),
             }
-        },
-        None => None,
+        }
     }
-  }
+
 }
 
-//pub struct LexerState {
-//    indent_lvl: usize,
-//    prev_token: Tok,
-//}
-//impl Default for LexerState { 
-//    fn default() -> Self {
-//        Self { indent_lvl: 0, prev_token: Tok::Newline }
+impl <'src> Iterator for FirrtlLexer<'src> {
+    type Item = Result<FirrtlToken<'src>>;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let span = self.llexer.span();
+
+        if let Some(ltok_res) = self.llexer.next() {
+            match ltok_res {
+                // Fancy spanned errors via [miette]
+                Err(ltok_err) => {
+                    let src = String::from_str(self.src).unwrap();
+                    let rsrc = NamedSource::new(self.filename.as_str(), src);
+                    return Some(Err(LexerError {
+                        src: rsrc, span: (span.start, span.len()).into()
+                    }.into()));
+                },
+                Ok(ltok) => self.firrtl_lex(ltok),
+            }
+
+        } else { 
+            None
+        }
+
+    }
+}
+
+
+//    pub fn lex_from_file(filename: &str) -> Result<()> {
+//        let s = Self::string_from_file(filename);
+//        let input = s.clone();
+//
+//        // Use [logos] to create a stream of tokens
+//        let mut lexer = LogosToken::lexer(&input);
+//        return lexer;
+//
+//        loop { 
+//            let span = lexer.span();
+//            match lexer.next() {
+//                Some(t) => match t {
+//                    Ok(t) => { 
+//                        println!("{:?} {:?}", t, span);
+//                    },
+//                    Err(e) => {
+//                        Err(LexerError {
+//                            src: NamedSource::new("parse-basic.fir", s.clone()),
+//                            span: (span.start, span.len()).into(),
+//                        })?;
+//                    },
+//                },
+//                None => break,
+//            }
+//        }
+//        Ok(())
+//
+//
+//
 //    }
+//
 //}
-
-/// Tokens generated by the [Lexer]. 
-///
-/// This is a bit hacky for a number of different reasons. 
-///
-/// FIXME: This *skips* whitespace; FIRRTL spec isn't written that way?
-///
-#[derive(Logos, Clone, Debug, PartialEq)]
-//#[logos(extras = LexerState)]
-#[logos(skip r"[ ]+")]
-pub enum Tok {
-
-    #[token("circuit")]             Circuit,
-    #[token("module")]              Module,
-    #[token("extmodule")]           ExtModule,
-    #[token("intmodule")]           IntModule,
-    #[token("intrinsic")]           Intrinsic,
-    #[token("parameter")]           Parameter,
-    #[token("defname")]             DefName,
-    #[token("ref")]                 Ref,
-    #[token("input")]               Input,
-    #[token("output")]              Output,
-    #[token("flip")]                Flip,
-
-    #[token("UInt")]                UInt,
-    #[token("SInt")]                SInt,
-    #[token("Analog")]              Analog,
-    #[token("Clock")]               Clock,
-    #[token("Reset")]               Reset,
-    #[token("AsyncReset")]          AsyncReset,
-    #[token("const")]               Const,
-
-    #[token("Probe")]               Probe,
-    #[token("RWProbe")]             RWProbe,
-
-    #[token("add")]                 Add,
-    #[token("sub")]                 Sub,
-    #[token("mul")]                 Mul,
-    #[token("div")]                 Div,
-    #[token("mod")]                 Mod,
-    #[token("lt")]                  Lt,
-    #[token("leq")]                 Leq,
-    #[token("gt")]                  Gt,
-    #[token("geq")]                 Geq,
-    #[token("eq")]                  Eq,
-    #[token("neq")]                 Neq,
-    #[token("dshl")]                Dshl,
-    #[token("dshr")]                Dshr,
-    #[token("and")]                 And,
-    #[token("or")]                  Or,
-    #[token("xor")]                 Xor,
-    #[token("cat")]                 Cat,
-
-    #[token("asUInt")]              AsUInt,
-    #[token("asSInt")]              AsSInt,
-    #[token("asClock")]             AsClock,
-    #[token("cvt")]                 Cvt,
-    #[token("neg")]                 Neg,
-    #[token("not")]                 Not,
-    #[token("andr")]                Andr,
-    #[token("orr")]                 Orr,
-    #[token("xorr")]                Xorr,
-
-    #[token("pad")]                 Pad,
-    #[token("shl")]                 Shl,
-    #[token("shr")]                 Shr,
-    #[token("head")]                Head,
-    #[token("tail")]                Tail,
-    #[token("bits")]                Bits,
-
-    #[token("mux")]                 Mux,
-    #[token("read")]                Read,
-    #[token("probe")]               RefProbe,
-    #[token("rwprobe")]             RefRWProbe,
-
-    #[token("old")]                 Old,
-    #[token("new")]                 New,
-    #[token("undefined")]           Undefined,
-    #[token("mem")]                 Mem,
-    #[token("data-type")]           Datatype,
-    #[token("depth")]               Depth,
-    #[token("read-latency")]        ReadLatency,
-    #[token("write-latency")]       WriteLatency,
-    #[token("read-under-write")]    ReadUnderWrite,
-    #[token("reader")]              Reader,
-    #[token("writer")]              Writer,
-    #[token("readwriter")]          ReadWriter,
-
-    #[token("force_initial")]       ForceInitial,
-    #[token("release_initial")]     ReleaseInitial,
-    #[token("force")]               Force,
-    #[token("release")]             Release,
-
-    #[token("wire")]                Wire,
-    #[token("reg")]                 Reg,
-    #[token("with")]                With,
-    #[token("of")]                  Of,
-    #[token("is invalid")]          IsInvalid,
-    #[token("is")]                  Is,
-    #[token("when")]                When,
-    #[token("skip")]                Skip,
-    #[token("define")]              Define,
-    #[token("connect")]             Connect,
-    #[token("invalidate")]          Invalidate,
-    #[token("inst")]                Inst,
-    #[token("node")]                Node,
-
-    #[token("=")]                   Equals,
-    #[token("<=")]                  LessThanEquals,
-    #[token(",")]                   Comma,
-    #[token(":")]                   Colon,
-    #[token("\"")]                  Quote,
-    #[token("<")]                   LessThan,
-    #[token(">")]                   GreaterThan,
-    #[token("[")]                   LSquareBracket,
-    #[token("]")]                   RSquareBracket,
-    #[token("{")]                   LBracket,
-    #[token("}")]                   RBracket,
-    #[token("(")]                   LParen,
-    #[token(")")]                   RParen,
-    #[token(".")]                   Period,
-    //#[token(" ")]                   Space,
-    #[token("\n")]                  Newline,
-
-    Indent,
-    Dedent,
-    EndOfFile,
-
-    // Extracts a valid FIRRTL identifier
-    #[regex("[a-zA-Z_][a-zA-Z0-9_]*", |lex| { lex.slice().parse().ok() })]
-    Ident(String),
-
-    // FIXME: We're just accepting *anything* here
-    #[regex(r"@(.)*", |lex| { lex.slice().parse().ok() })]
-    Info(String),
-
-    // FIXME: Should we try to convert these into some numeric datatype
-    // here, or keep them as [String] until later on?
-    #[regex("\"(h-?[0-9a-fA-F]*\")", |lex| { lex.slice().parse().ok() })]
-    HexLit(String),
-    #[regex("\"(b-?[01]*)\"", |lex| { lex.slice().parse().ok() })]
-    BinLit(String),
-    #[regex("\"(o-?[0-7]*)\"", |lex| { lex.slice().parse().ok() })]
-    OctLit(String),
-    #[regex("[0-9]+", |lex| { lex.slice().parse().ok() })]
-    DecLit(usize),
-
-}
-impl std::fmt::Display for Tok {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{:?}", self)
-  }
-}
-
-
-
-//#[cfg(test)]
-//mod test {
-//    use super::*;
-//    #[test]
-//    fn test_lexer() {
-//        let s = crate::read_file(
-//            "./chisel-tests/firrtl/MyNestedModule.fir".to_string()
-//        );
-//        let mut l = Lexer::new(&s);
-//    }
-//}
-
 
