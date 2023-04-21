@@ -7,6 +7,7 @@ edition = "2021"
 logos = "0.13.0"
 miette = { version = "5.8.0", features = ["fancy", ] }
 thiserror = "1.0.40"
+regex = "1.8.0"
 
 [build-dependencies]
 
