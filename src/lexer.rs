@@ -16,10 +16,16 @@ pub struct LexerError {
 }
 
 // NOTE: This skips horizontal whitespace and comments
+// NOTE: Remember that *matches* on whitespace depend on newline
 #[derive(Logos, Debug, PartialEq)]
 #[logos(skip r"[ \n\r,]+")]
-#[logos(skip r";.*\n")]
+//#[logos(skip r";.*\n")]
+//#[logos(skip r";([^\n\r])+")]
 pub enum LogosToken<'src> {
+
+    #[regex(r";([^\n\r])*")]
+    Comment(&'src str),
+
     #[regex("[a-zA-Z_][a-zA-Z0-9_$-]*", |lex| lex.slice())]
     IdentKw(&'src str),
 
@@ -35,8 +41,8 @@ pub enum LogosToken<'src> {
     #[regex(r#"@\[([^'\\\[\]]|\\t|\\u|\\n|\\|\\')*\]"#, |lex| lex.slice())]
     FileInfo(&'src str),
 
-    #[regex(r"<[0-9][0-9]*>")]
-    Width(&'src str),
+    //#[regex(r"<[0-9][0-9]*>")]
+    //Width(&'src str),
 
     //#[regex("[a-zA-Z]")] Alpha,
     #[regex("[0-9]+", |lex| lex.slice())]
@@ -71,31 +77,9 @@ pub enum LogosToken<'src> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FirrtlPunctuation {
+pub enum FirrtlPunct {
     Period, Colon, Question, LParen, RParen, LBrace, RBrace, LSquare, RSquare,
     Less, LessEqual, LessMinus, Greater, Equal, EqualGreater
-}
-impl <'src> FirrtlPunctuation {
-    fn from_lt(t: &LogosToken<'src>) -> Option<Self> { 
-        match t {
-            LogosToken::Period       => Some(Self::Period),
-            LogosToken::Colon        => Some(Self::Colon),
-            LogosToken::Question     => Some(Self::Question),
-            LogosToken::LParen       => Some(Self::LParen),
-            LogosToken::RParen       => Some(Self::RParen),
-            LogosToken::LBrace       => Some(Self::LBrace),
-            LogosToken::RBrace       => Some(Self::RBrace),
-            LogosToken::LSquare      => Some(Self::LSquare),
-            LogosToken::RSquare      => Some(Self::RSquare),
-            LogosToken::Less         => Some(Self::Less),
-            LogosToken::LessEqual    => Some(Self::LessEqual),
-            LogosToken::LessMinus    => Some(Self::LessMinus),
-            LogosToken::Greater      => Some(Self::Greater),
-            LogosToken::Equal        => Some(Self::Equal),
-            LogosToken::EqualGreater => Some(Self::EqualGreater),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,16 +94,15 @@ pub enum FirrtlLiteral<'src> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FirrtlToken<'src> {
+    Ignore,
     /// Identifier/keyword
     IdentKw(&'src str),
     /// Literals
     Literal(FirrtlLiteral<'src>),
     /// Punctuation
-    Punctuation(FirrtlPunctuation),
+    Punct(FirrtlPunct),
     /// File info
     FileInfo(&'src str),
-    /// Type width (in bits)
-    TypeWidth(usize),
     /// Horizontal whitespace
     WhitespaceH(usize),
     /// End-of-file
@@ -129,15 +112,31 @@ impl <'src> FirrtlToken<'src> {
     pub fn is_identkw(&self) -> bool { 
         matches!(self, Self::IdentKw(_)) 
     }
-    pub fn is_punctuation(&self, p: FirrtlPunctuation) -> bool { 
-        matches!(self, Self::Punctuation(p)) 
+    pub fn is_punctuation(&self) -> bool {
+        matches!(self, Self::Punct(_)) 
     }
     pub fn is_whitespace(&self) -> bool { 
         matches!(self, Self::WhitespaceH(_)) 
     }
+    pub fn is_int_lit(&self) -> bool {
+        matches!(self, Self::Literal(FirrtlLiteral::Int(_)))
+    }
+
+
+    pub fn get_whitespace(&self) -> Option<usize> {
+        if let Self::WhitespaceH(x) = self { Some(*x) } else { None }
+    }
+    pub fn whitespace_matches(&self, x: usize) -> bool {
+        matches!(self, Self::WhitespaceH(x))
+    }
+    pub fn punct_matches(&self, p: FirrtlPunct) -> bool {
+        matches!(self, Self::Punct(p)) 
+    }
+    pub fn identkw_matches(&self, s: &str) -> bool {
+        matches!(self, Self::IdentKw(s))
+    }
+
 }
-
-
 
 
 pub struct FirrtlLexer<'src> {
@@ -157,13 +156,15 @@ impl <'src> FirrtlLexer<'src> {
         }
     }
 
+    /// Convert from [LogosToken] to [FirrtlToken].
     fn firrtl_lex(&mut self, cur: LogosToken<'src>) -> FirrtlToken<'src>
     {
         println!("Start at {:?}, {:?}", cur, self.llexer.span());
         match cur { 
-            LogosToken::Width(s) => {
-                FirrtlToken::TypeWidth(s[1..s.len()-1].parse().unwrap())
-            },
+            LogosToken::Comment(s) => FirrtlToken::Ignore,
+            //LogosToken::Width(s) => {
+            //    FirrtlToken::TypeWidth(s[1..s.len()-1].parse().unwrap())
+            //},
             LogosToken::WhitespaceH(s) => FirrtlToken::WhitespaceH(s.len()),
             LogosToken::IdentKw(s)  => FirrtlToken::IdentKw(s),
             LogosToken::FileInfo(s) => FirrtlToken::FileInfo(s),
@@ -183,11 +184,22 @@ impl <'src> FirrtlLexer<'src> {
                 FirrtlToken::Literal(FirrtlLiteral::Version(s))
             },
 
-            lt if FirrtlPunctuation::from_lt(&lt).is_some() => {
-                FirrtlToken::Punctuation(
-                    FirrtlPunctuation::from_lt(&lt).unwrap()
-                )
-            },
+            LogosToken::Period => FirrtlToken::Punct(FirrtlPunct::Period),
+            LogosToken::Colon => FirrtlToken::Punct(FirrtlPunct::Colon),
+            LogosToken::Question => FirrtlToken::Punct(FirrtlPunct::Question),
+            LogosToken::LParen => FirrtlToken::Punct(FirrtlPunct::LParen),
+            LogosToken::RParen => FirrtlToken::Punct(FirrtlPunct::RParen),
+            LogosToken::LBrace => FirrtlToken::Punct(FirrtlPunct::LBrace),
+            LogosToken::RBrace => FirrtlToken::Punct(FirrtlPunct::RBrace),
+            LogosToken::LSquare => FirrtlToken::Punct(FirrtlPunct::LSquare),
+            LogosToken::RSquare => FirrtlToken::Punct(FirrtlPunct::RSquare),
+            LogosToken::Less => FirrtlToken::Punct(FirrtlPunct::Less),
+            LogosToken::LessEqual => FirrtlToken::Punct(FirrtlPunct::LessEqual),
+            LogosToken::LessMinus => FirrtlToken::Punct(FirrtlPunct::LessMinus),
+            LogosToken::Greater => FirrtlToken::Punct(FirrtlPunct::Greater),
+            LogosToken::Equal => FirrtlToken::Punct(FirrtlPunct::Equal),
+            LogosToken::EqualGreater => 
+                FirrtlToken::Punct(FirrtlPunct::EqualGreater),
             _ => unimplemented!("{:?}", cur),
         }
     }
