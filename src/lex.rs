@@ -179,7 +179,9 @@ impl <'a> FirrtlStream<'a> {
         if let Token::IdentKw(s) = self.token() {
             Ok(s)
         } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected identkw".to_string()))
+            let e = format!("expected Token::IdentKw, got {:?}",
+                            self.token());
+            Err(FirrtlStreamErr::ExpectedToken(e))
         }
     }
 

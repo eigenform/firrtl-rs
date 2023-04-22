@@ -1,6 +1,7 @@
 
 use crate::lex::*;
 use crate::ast::*;
+use crate::token;
 
 pub enum ParserError {
 }
@@ -35,7 +36,6 @@ impl <'a> FirrtlParser<'a> {
     {
         FirrtlParser::parse_firrtl_version(stream)?;
         
-        println!("{:?}", stream.line().content());
         assert!(stream.indent_level() == 0);
         stream.match_identkw("circuit")?;
         stream.next_token();
@@ -141,58 +141,8 @@ impl <'a> FirrtlParser<'a> {
             if stream.indent_level() < body_indent_level {
                 break;
             }
-
             let parameter = FirrtlParser::parse_parameter(stream)?;
-
         }
-
-
-        //loop {
-        //    if stream.indent_level() < body_indent_level {
-        //        break;
-        //    }
-
-        //    // Unexpected keyword
-        //    let keywd = stream.get_identkw()?;
-        //    if keywd != "defname" || keywd != "parameter" {
-        //        return Err(FirrtlStreamErr::Other(
-        //            "unexpected keyword in extmodule?")
-        //        );
-        //    }
-
-        //    while stream.match_identkw("defname").is_ok() {
-        //        stream.next_token();
-        //        stream.match_punc("=")?;
-        //        stream.next_token();
-        //        let id = stream.get_identkw()?;
-        //        stream.next_token();
-        //    }
-
-        //    while stream.match_identkw("parameter").is_ok() {
-        //        println!("{:?}", stream.line().content());
-        //        stream.next_token();
-        //        let param_id = stream.get_identkw()?;
-        //        stream.next_token();
-        //        stream.match_punc("=")?;
-        //        stream.next_token();
-
-        //        if let Ok(lit) = stream.get_lit_int() {
-        //            stream.next_token();
-        //        } 
-        //        else if let Ok(lit) = stream.get_lit_float() {
-        //            stream.next_token();
-        //        } 
-        //        else if let Ok(lit) = stream.get_lit_str() {
-        //            stream.next_token();
-        //        } else {
-        //            unimplemented!("unimpl parameter literal?")
-        //        }
-
-        //        //unimplemented!("parameter");
-        //    }
-
-        //}
-        //unimplemented!("extmodule");
         Ok(())
     }
 
@@ -212,7 +162,6 @@ impl <'a> FirrtlParser<'a> {
     fn parse_parameter(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr> 
     {
-        println!("{:?}", stream.line().content());
         stream.match_identkw("parameter")?;
         stream.next_token();
         let param_id = stream.get_identkw()?;
@@ -257,40 +206,95 @@ impl <'a> FirrtlParser<'a> {
 
         Ok(())
     }
+
     fn parse_statements(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
         let body_indent_level = stream.indent_level();
         loop {
             assert!(stream.is_sol());
-            println!("{:?}", stream.line().content());
+            println!("[*] Parsing statement: {:?}", stream.line().content());
 
-            // FIXME: This must be a module without statements?
             if stream.indent_level() < body_indent_level {
                 break;
             }
 
-            let st_first = stream.get_identkw()?;
-            stream.next_token();
-            // reference <= expr
-            if stream.match_punc("<=").is_ok() {
-                stream.next_token();
-                let expr = FirrtlParser::parse_expr(stream)?;
-                assert!(stream.is_sol());
+            // FIXME: Not clear if this is sufficient to disambiguate 
+            // statements that start with a reference?
+            let is_reference_stmt = (
+                stream.remaining_tokens().contains(&token::Token::LessEqual) ||
+                stream.remaining_tokens().contains(&token::Token::LessMinus) ||
+                stream.remaining_tokens().windows(2).position(|w| { w == 
+                    &[
+                        token::Token::IdentKw("is".to_string()), 
+                        token::Token::IdentKw("invalid".to_string())
+                    ]
+                }).is_some()
+            );
+
+            if is_reference_stmt {
+                println!("[*] Parsing reference statement: {:?}", stream.line().content());
+                let reference = FirrtlParser::parse_reference(stream)?;
+                // Must be an assignment '<=', this is an identifier
+                if stream.match_punc("<=").is_ok() {
+                    stream.next_token();
+                    let expr = FirrtlParser::parse_expr(stream)?;
+                } 
+                // Must be a partial assignment '<-'?,
+                else if stream.match_punc("<-").is_ok() {
+                    stream.next_token();
+                    let expr = FirrtlParser::parse_expr(stream)?;
+                }
+                // Must be 'is invalid', this is an identifier
+                else if stream.match_identkw("is").is_ok() {
+                    stream.next_token();
+                    stream.match_identkw("invalid")?;
+                    stream.next_token();
+                } else { 
+                    panic!("unexpected keyword in reference statement?");
+                }
+                assert!(stream.is_sol(), "{:?}", stream.remaining_tokens());
             } 
-            // reference 'is invalid'
-            else if stream.match_identkw("is").is_ok() {
-                stream.next_token();
-                stream.match_identkw("invalid")?;
-                stream.next_token();
-                assert!(stream.is_sol());
-                continue;
-            } 
-            // keyword
+            // Otherwise, this is a "simple" statement where we can just 
+            // match on some keyword
             else {
-                println!("{:?}", stream.remaining_tokens());
-                unimplemented!("statement keyword");
+                match stream.get_identkw()? {
+                    "wire" => {
+                        stream.next_token();
+                        let id = stream.get_identkw()?;
+                        stream.next_token();
+                        stream.match_punc(":")?;
+                        stream.next_token();
+                        let ty = FirrtlParser::parse_type(stream)?;
+                    },
+                    "reg"  => { unimplemented!("reg"); },
+                    "inst" => { unimplemented!("inst"); },
+                    "node" => { 
+                        stream.next_token();
+                        let id = stream.get_identkw()?;
+                        stream.next_token();
+                        stream.match_punc("=")?;
+                        stream.next_token();
+                        let expr = FirrtlParser::parse_expr(stream)?;
+                    },
+                    "attach" => { unimplemented!("attach"); },
+                    "when" => { unimplemented!("when"); },
+                    "stop" => { unimplemented!("stop"); },
+                    "printf" => { unimplemented!("printf"); },
+                    "skip" => { 
+                        stream.next_token();
+                    },
+                    "define" => { unimplemented!("define"); },
+                    "force_release" => { unimplemented!("force_release"); },
+                    "connect" => { unimplemented!("connect"); },
+                    "invalidate" => { unimplemented!("invalidate"); },
+                    identkw @ _ => {
+                        panic!("unexpected statement keyword {}", identkw);
+                    },
+                }
+                assert!(stream.is_sol());
             }
+
         }
         //panic!("statements end?");
         Ok(())
@@ -299,53 +303,139 @@ impl <'a> FirrtlParser<'a> {
     fn parse_expr(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        println!("{:?}", stream.remaining_tokens());
+        // NOTE: Careful with lookahead behavior in this function ..
 
-        let expr_st = stream.get_identkw()?;
-            
-        if (expr_st == "UInt" || expr_st == "SInt") {
+        println!("parse_expr @ {:?}", stream.remaining_tokens());
+
+        // This must be a static_reference (a single identifier)
+        if stream.remaining_tokens().len() == 1 {
+            let ident = stream.get_identkw()?;
             stream.next_token();
-            let width = FirrtlParser::parse_optional_typewidth(stream)?;
-            unimplemented!("expr literal");
+            return Ok(());
         }
 
+        // FIXME: Does this properly disambiguate between "an operation" 
+        // and "a reference?"
+        // Is this expression a primitive operation?
+        let is_primop_expr = {
+            if stream.remaining_tokens().len() >= 2 {
+                let kw = stream.get_identkw()?;
+                let kw_ok = (
+                    PrimOp2Expr::from_str(kw).is_some() ||
+                    PrimOp1Expr::from_str(kw).is_some() ||
+                    PrimOp1Expr1Int::from_str(kw).is_some() ||
+                    PrimOp1Expr2Int::from_str(kw).is_some()
+                );
+                let has_lparen = stream.peekn_token(1).match_punc("(")
+                    .unwrap_or(false);
+                kw_ok && has_lparen
+            } else {
+                false
+            }
+        };
+        // Is this expression a mux() operation?
+        let is_mux_expr = {
+            if stream.remaining_tokens().len() >= 2 {
+                stream.match_identkw("mux").is_ok() &&
+                    stream.peekn_token(1).match_punc("(").unwrap_or(false)
+            } else {
+                false
+            }
+        };
+        // Is this expression a read() operation?
+        let is_read_expr = {
+            if stream.remaining_tokens().len() >= 2 {
+                stream.match_identkw("read").is_ok() &&
+                    stream.peekn_token(1).match_punc("(").unwrap_or(false)
+            } else {
+                false
+            }
+        };
+        // Is this expression a literal SInt or UInt?
+        let is_lit_expr = {
+            if stream.remaining_tokens().len() >= 2 {
+                let maybe_keyword = stream.get_identkw()?;
+                let kw_ok = (
+                    (maybe_keyword == "UInt" || maybe_keyword == "SInt")
+                );
+                let has_width = (
+                    if stream.peekn_token(1).match_punc("<").unwrap_or(false) {
+                        if stream.peekn_token(2).is_lit_int() {
+                            if stream.peekn_token(3).match_punc(">")
+                                .unwrap_or(false) { true }
+                            else { false }
+                        } else { false }
+                    } else { false }
+                );
+                let has_lparen = if has_width {
+                    stream.peekn_token(4).match_punc("(").unwrap_or(false)
+                } else { 
+                    stream.peekn_token(1).match_punc("(").unwrap_or(false)
+                };
+                kw_ok && has_lparen
+            } else {
+                false
+            }
+        };
 
-        // This must mean the expression is some op (or mux/read)
-        if stream.match_punc("(").is_ok() {
-            stream.next_token(); // expr_st
-            stream.next_token(); // "("
-            if PrimOp2Expr::from_str(expr_st).is_some() {
+        // This must be a reference expression
+        if !(is_lit_expr || is_read_expr || is_mux_expr || is_primop_expr) {
+            println!("parse ref expr {:?}", stream.remaining_tokens());
+            let reference = FirrtlParser::parse_reference(stream)?;
+            return Ok(());
+        } 
+
+        if is_lit_expr {
+            let sint_or_uint = stream.get_identkw()?;
+            stream.next_token();
+            let width = FirrtlParser::parse_optional_typewidth(stream)?;
+            stream.match_punc("(")?;
+            unimplemented!("expr literal");
+        }
+        else if is_read_expr {
+            unimplemented!("expr read");
+        } 
+        else if is_mux_expr {
+            unimplemented!("expr mux");
+        }
+        else if is_primop_expr {
+            let primop_kw = stream.get_identkw()?;
+            if PrimOp2Expr::from_str(primop_kw).is_some() {
+                stream.next_token();
+                stream.match_punc("(")?;
+                stream.next_token();
                 let e1 = FirrtlParser::parse_expr(stream)?;
                 let e2 = FirrtlParser::parse_expr(stream)?;
                 stream.match_punc(")")?;
                 stream.next_token();
             } 
-            else if PrimOp1Expr::from_str(expr_st).is_some() {
+            else if PrimOp1Expr::from_str(primop_kw).is_some() {
+                stream.next_token();
+                stream.match_punc("(")?;
+                stream.next_token();
                 let e1 = FirrtlParser::parse_expr(stream)?;
                 stream.match_punc(")")?;
                 stream.next_token();
             } 
-            else if PrimOp1Expr1Int::from_str(expr_st).is_some() {
+            else if PrimOp1Expr1Int::from_str(primop_kw).is_some() {
+                stream.next_token();
+                stream.match_punc("(")?;
+                stream.next_token();
                 unimplemented!("PrimOp1Expr1Int");
             } 
-            else if PrimOp1Expr2Int::from_str(expr_st).is_some() {
+            else if PrimOp1Expr2Int::from_str(primop_kw).is_some() {
+                stream.next_token();
+                stream.match_punc("(")?;
+                stream.next_token();
                 unimplemented!("PrimOp1Expr2Int");
-            } 
-            else if expr_st == "mux" {
-                unimplemented!("mux");
+            } else {
+                panic!("eh?");
             }
-            else if expr_st == "read" {
-                unimplemented!("read");
-            }
-            else {
-                return Err(FirrtlStreamErr::Other(
-                    "Invalid keyword in statement?"
-                ));
-            }
-        } else {
-            let ref_stmt = FirrtlParser::parse_reference(stream)?;
-            //unimplemented!("ref?");
         }
+        else {
+            panic!("how did we get here?")
+        }
+
         Ok(())
         //unimplemented!("expr");
     }
@@ -369,28 +459,36 @@ impl <'a> FirrtlParser<'a> {
     fn parse_static_reference(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
+
+        // Static references *must* begin with an identifier
         let ref_ident = stream.get_identkw()?;
         stream.next_token();
 
+        // ... followed by some arbitrary list of subfield/subindex
         loop {
-            println!("{:?}", stream.remaining_tokens());
+            println!("Parsing static reference {:?}", stream.remaining_tokens());
+
             // Must be a subfield access
             if stream.match_punc(".").is_ok() {
                 stream.next_token();
-                let subfield_ident = stream.get_identkw()?;
-                stream.next_token();
-                continue;
-            }
+                // FIXME: SFC behavior allows unsigned integer subfield names
+                if let Ok(lit) = stream.get_lit_int() {
+                    stream.next_token();
+                } 
+                else if let Ok(ident) = stream.get_identkw() {
+                    stream.next_token();
+                } 
+            } 
             // Must be a subindex access
-            if stream.match_punc("[").is_ok() {
+            else if stream.match_punc("[").is_ok() {
                 stream.next_token();
                 let subindex = stream.get_lit_int()?;
                 stream.next_token();
                 stream.match_punc("]")?;
                 stream.next_token();
-                continue;
+            } else {
+                break;
             }
-            break;
         }
         Ok(())
     }
@@ -469,10 +567,19 @@ impl <'a> FirrtlParser<'a> {
         } else {
             false
         };
-        let field_id = stream.get_identkw()?;
+
+        // FIXME: SFC defines 'fieldId' which *includes* unsigned integers.
+        // I'm only doing this to pass thru 'parse-basic.fir' from llvm/CIRCT. 
+        let field_id = if let Ok(lit) = stream.get_lit_int() {
+            lit
+        } else {
+            stream.get_identkw()?
+        };
         stream.next_token();
+
         stream.match_punc(":")?;
         stream.next_token();
+
         println!("{:?}", stream.remaining_tokens());
         let field_type = FirrtlParser::parse_type(stream)?;
         println!("{:?}", stream.remaining_tokens());

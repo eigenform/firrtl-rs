@@ -35,7 +35,7 @@ impl PrimOp2Expr {
 }
 
 pub enum PrimOp1Expr {
-    AsUInt, AsSInt, AsClock, Cvt,
+    AsUInt, AsSInt, AsClock, AsAsyncReset, Cvt,
     Neg, Not,
     Andr, Orr, Xorr
 }
@@ -45,6 +45,7 @@ impl PrimOp1Expr {
             "asUInt"  => Some(Self::AsUInt),
             "asSInt"  => Some(Self::AsSInt),
             "asClock" => Some(Self::AsClock),
+            "asAsyncReset" => Some(Self::AsAsyncReset),
             "cvt"     => Some(Self::Cvt),
             "neg"     => Some(Self::Neg),
             "not"     => Some(Self::Not),
