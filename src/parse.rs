@@ -18,17 +18,23 @@ impl <'a> FirrtlParser<'a> {
 
 impl <'a> FirrtlParser<'a> {
 
-
-    pub fn parse(stream: &mut FirrtlStream<'a>) -> Result<(), FirrtlStreamErr> {
-
-        println!("{:?}", stream.line().content());
+    pub fn parse_firrtl_version(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
         assert!(stream.indent_level() == 0);
         stream.match_identkw("FIRRTL")?;
         stream.next_token();
         stream.match_identkw("version")?;
         stream.next_token();
         stream.next_line();
+        Ok(())
+    }
 
+    pub fn parse(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr> 
+    {
+        FirrtlParser::parse_firrtl_version(stream)?;
+        
         println!("{:?}", stream.line().content());
         assert!(stream.indent_level() == 0);
         stream.match_identkw("circuit")?;
@@ -60,11 +66,23 @@ impl <'a> FirrtlParser<'a> {
             } 
             else if stream.match_identkw("extmodule").is_ok() {
                 stream.next_token();
-                unimplemented!("extmodule");
+                let extmodule_id = stream.get_identkw()?;
+                stream.next_token();
+                stream.match_punc(":")?;
+                stream.next_token();
+                assert!(stream.indent_level() > m_indent);
+                let extmodule = FirrtlParser::parse_extmodule(stream)?;
+                //unimplemented!("extmodule");
             } 
             else if stream.match_identkw("intmodule").is_ok() {
                 stream.next_token();
-                unimplemented!("intmodule");
+                let intmodule_id = stream.get_identkw()?;
+                stream.next_token();
+                stream.match_punc(":")?;
+                stream.next_token();
+                assert!(stream.indent_level() > m_indent);
+                let intmodule = FirrtlParser::parse_intmodule(stream)?;
+                //unimplemented!("intmodule");
             } else {
                 return Err(FirrtlStreamErr::Other("bad module keyword?"));
             }
@@ -72,6 +90,153 @@ impl <'a> FirrtlParser<'a> {
         }
         Ok(())
     }
+
+    fn parse_intmodule(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr> 
+    {
+        let body_indent_level = stream.indent_level();
+        assert!(stream.is_sol());
+        let port_list = FirrtlParser::parse_portlist(stream)?;
+        assert!(stream.is_sol());
+
+        stream.match_identkw("intrinsic")?;
+        stream.next_token();
+        stream.match_punc("=")?;
+        stream.next_token();
+        let intrin_id = stream.get_identkw()?;
+        stream.next_token();
+
+        loop {
+            if stream.indent_level() < body_indent_level {
+                break;
+            }
+            let parameter = FirrtlParser::parse_parameter(stream)?;
+        }
+        Ok(())
+
+    }
+
+    fn parse_extmodule(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr> 
+    {
+        let body_indent_level = stream.indent_level();
+        assert!(stream.is_sol());
+        let port_list = FirrtlParser::parse_portlist(stream)?;
+        assert!(stream.is_sol());
+
+        loop { 
+            // End of extmodule
+            if stream.indent_level() < body_indent_level {
+                break;
+            }
+            // Start of parameters
+            if stream.match_identkw("parameter").is_ok() {
+                break;
+            }
+            let defname = FirrtlParser::parse_defname(stream)?;
+        }
+
+        loop { 
+            // End of extmodule
+            if stream.indent_level() < body_indent_level {
+                break;
+            }
+
+            let parameter = FirrtlParser::parse_parameter(stream)?;
+
+        }
+
+
+        //loop {
+        //    if stream.indent_level() < body_indent_level {
+        //        break;
+        //    }
+
+        //    // Unexpected keyword
+        //    let keywd = stream.get_identkw()?;
+        //    if keywd != "defname" || keywd != "parameter" {
+        //        return Err(FirrtlStreamErr::Other(
+        //            "unexpected keyword in extmodule?")
+        //        );
+        //    }
+
+        //    while stream.match_identkw("defname").is_ok() {
+        //        stream.next_token();
+        //        stream.match_punc("=")?;
+        //        stream.next_token();
+        //        let id = stream.get_identkw()?;
+        //        stream.next_token();
+        //    }
+
+        //    while stream.match_identkw("parameter").is_ok() {
+        //        println!("{:?}", stream.line().content());
+        //        stream.next_token();
+        //        let param_id = stream.get_identkw()?;
+        //        stream.next_token();
+        //        stream.match_punc("=")?;
+        //        stream.next_token();
+
+        //        if let Ok(lit) = stream.get_lit_int() {
+        //            stream.next_token();
+        //        } 
+        //        else if let Ok(lit) = stream.get_lit_float() {
+        //            stream.next_token();
+        //        } 
+        //        else if let Ok(lit) = stream.get_lit_str() {
+        //            stream.next_token();
+        //        } else {
+        //            unimplemented!("unimpl parameter literal?")
+        //        }
+
+        //        //unimplemented!("parameter");
+        //    }
+
+        //}
+        //unimplemented!("extmodule");
+        Ok(())
+    }
+
+    fn parse_defname(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr> 
+    {
+        stream.match_identkw("defname")?;
+        stream.next_token();
+        stream.match_punc("=")?;
+        stream.next_token();
+        let id = stream.get_identkw()?;
+        stream.next_token();
+        assert!(stream.is_sol());
+        Ok(())
+    }
+
+    fn parse_parameter(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr> 
+    {
+        println!("{:?}", stream.line().content());
+        stream.match_identkw("parameter")?;
+        stream.next_token();
+        let param_id = stream.get_identkw()?;
+        stream.next_token();
+        stream.match_punc("=")?;
+        stream.next_token();
+
+        if let Ok(lit) = stream.get_lit_int() {
+            stream.next_token();
+            assert!(stream.is_sol());
+        } 
+        else if let Ok(lit) = stream.get_lit_float() {
+            stream.next_token();
+            assert!(stream.is_sol());
+        } 
+        else if let Ok(lit) = stream.get_lit_str() {
+            stream.next_token();
+            assert!(stream.is_sol());
+        } else {
+            unimplemented!("unimpl parameter literal?")
+        }
+        Ok(())
+    }
+
 
     fn parse_module(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr> 
@@ -241,11 +406,9 @@ impl <'a> FirrtlParser<'a> {
             assert!(stream.is_sol());
             println!("{:?}", stream.line().content());
 
-            // FIXME: This must be a module without ports?
             if stream.indent_level() < body_indent_level {
                 break;
             }
-
 
             let has_dir  = (
                 stream.token().match_identkw("input").unwrap_or(false) || 
@@ -283,11 +446,7 @@ impl <'a> FirrtlParser<'a> {
     fn parse_optional_typewidth(stream: &mut FirrtlStream<'a>)
         -> Result<Option<usize>, FirrtlStreamErr>
     {
-        let ls  = stream.token().match_punc("<").is_some();
-        let lit = stream.peekn_token(1).is_lit_int();
-        let gt  = stream.peekn_token(2).match_punc(">").is_some();
-        let width = if ls && lit && gt {
-            stream.match_punc("<")?;
+        let width = if stream.match_punc("<").is_ok() {
             stream.next_token();
             let w = stream.get_lit_int()?;
             stream.next_token();
@@ -300,14 +459,61 @@ impl <'a> FirrtlParser<'a> {
         Ok(width)
     }
 
- 
+    fn parse_bundle_field(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr>
+    {
+        println!("{:?}", stream.remaining_tokens());
+        let flip = if stream.match_identkw("flip").is_ok() {
+            stream.next_token();
+            true
+        } else {
+            false
+        };
+        let field_id = stream.get_identkw()?;
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+        println!("{:?}", stream.remaining_tokens());
+        let field_type = FirrtlParser::parse_type(stream)?;
+        println!("{:?}", stream.remaining_tokens());
+        Ok(())
+    }
+
+    fn parse_bundle(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr>
+    {
+        stream.match_punc("{")?;
+        stream.next_token();
+
+        // NOTE: Always at least one field?
+        let field = FirrtlParser::parse_bundle_field(stream)?;
+        loop { 
+            println!("{:?}", stream.remaining_tokens());
+            // End of fields
+            if stream.match_punc("}").is_ok() {
+                stream.next_token();
+                break;
+            }
+
+            println!("{:?}", stream.remaining_tokens());
+            let f = FirrtlParser::parse_bundle_field(stream)?;
+            println!("{:?}", stream.remaining_tokens());
+
+        }
+
+        Ok(())
+    }
+
+
+
 
     fn parse_type(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr>
     {
         // This is a bundle type
         if stream.match_punc("{").is_ok() {
-            unimplemented!("bundle");
+            let bundle_type = FirrtlParser::parse_bundle(stream)?;
+            //unimplemented!("bundle");
         } 
         // This is some ground type (or an array of ground type)
         else {
@@ -324,28 +530,9 @@ impl <'a> FirrtlParser<'a> {
             } else {
                 None
             };
-            // A width is optional for some ground types
-            //let ls  = stream.token().match_punc("<").is_some();
-            //let lit = stream.peekn_token(1).is_lit_int();
-            //let gt  = stream.peekn_token(2).match_punc(">").is_some();
-            //let width = if maybe_width && ls && lit && gt {
-            //    stream.match_punc("<")?;
-            //    stream.next_token();
-            //    let w = stream.get_lit_int()?;
-            //    stream.next_token();
-            //    stream.match_punc(">")?;
-            //    stream.next_token();
-            //    Some(w.parse::<usize>().unwrap())
-            //} else { 
-            //    None
-            //};
 
             // Optionally indicates an array type
-            let ls  = stream.token().match_punc("[").is_some();
-            let lit = stream.peekn_token(1).is_lit_int();
-            let gt  = stream.peekn_token(2).match_punc("]").is_some();
-            let arr_width = if maybe_width && ls && lit && gt {
-                stream.match_punc("[")?;
+            let arrwidth = if stream.match_punc("[").is_ok() {
                 stream.next_token();
                 let w = stream.get_lit_int()?;
                 stream.next_token();
@@ -359,6 +546,7 @@ impl <'a> FirrtlParser<'a> {
 
         Ok(())
     }
+
 
 
 }

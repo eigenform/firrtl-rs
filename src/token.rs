@@ -17,6 +17,9 @@ pub enum Token {
     #[regex("[0-9]+", |lex| lex.slice().parse().ok())]
     LiteralInt(String),
 
+    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse().ok())]
+    LiteralFloat(String),
+
     #[regex("[+-][0-9]+", |lex| lex.slice().parse().ok())]
     LiteralSInt(String),
 
@@ -101,6 +104,9 @@ impl Token {
     }
     pub fn get_lit_int(&self) -> Option<&str> {
         if let Token::LiteralInt(s) = self { Some(s) } else { None }
+    }
+    pub fn get_lit_float(&self) -> Option<&str> {
+        if let Token::LiteralFloat(s) = self { Some(s) } else { None }
     }
     pub fn get_lit_sint(&self) -> Option<&str> {
         if let Token::LiteralSInt(s) = self { Some(s) } else { None }

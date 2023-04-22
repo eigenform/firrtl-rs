@@ -182,11 +182,37 @@ impl <'a> FirrtlStream<'a> {
             Err(FirrtlStreamErr::ExpectedToken("expected identkw".to_string()))
         }
     }
+
     pub fn get_lit_int(&self) -> Result<&'a str, FirrtlStreamErr> {
         if let Some(lit) = self.token().get_lit_int() {
             Ok(lit)
         } else { 
             Err(FirrtlStreamErr::ExpectedToken("expected lit int".to_string()))
+        }
+    }
+    pub fn get_lit_sint(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_sint() {
+            Ok(lit)
+        } else { 
+            Err(FirrtlStreamErr::ExpectedToken("expected lit sint".to_string()))
+        }
+    }
+
+
+    pub fn get_lit_float(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_float() {
+            Ok(lit)
+        } else { 
+            Err(FirrtlStreamErr::ExpectedToken("expected lit flt".to_string()))
+        }
+    }
+
+
+    pub fn get_lit_str(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_str() {
+            Ok(lit)
+        } else {
+            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
         }
     }
 
