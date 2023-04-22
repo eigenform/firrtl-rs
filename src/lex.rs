@@ -36,6 +36,9 @@ impl FirrtlTokenizedLine {
     pub fn len(&self) -> usize { 
         self.tokens.len()
     }
+    pub fn content(&self) -> &str { 
+        &self.content
+    }
 }
 
 pub struct FirrtlLexer;
