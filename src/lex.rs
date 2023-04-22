@@ -89,6 +89,10 @@ impl FirrtlLexer {
     }
 }
 
+/// FIRRTL parse error.
+///
+/// NOTE: At some point, you might want fancy spanned errors 
+/// (ie. with [miette] or something similar)
 #[derive(Debug)]
 pub enum FirrtlStreamErr {
     ExpectedToken(String),
@@ -134,9 +138,20 @@ impl <'a> FirrtlStream<'a> {
     pub fn line(&self) -> &'a FirrtlTokenizedLine {
         &self.lines[self.gcur]
     }
+
+    /// Returns 'true' when the current cursor points to the start of a line.
+    pub fn is_sol(&self) -> bool {
+        self.lcur == 0
+    }
+
     /// Get the current token
     pub fn token(&self) -> &'a Token {
         &self.lines[self.gcur].tokens[self.lcur]
+    }
+
+    /// Get a slice of the remaining tokens on the current line
+    pub fn remaining_tokens(&self) -> &'a [Token] {
+        &self.lines[self.gcur].tokens[self.lcur..]
     }
 
     /// Get the current indentation level
@@ -152,11 +167,23 @@ impl <'a> FirrtlStream<'a> {
         &self.lines[self.gcur].tokens[self.lcur + 1]
     }
 
+    pub fn peekn_token(&self, n: usize) -> &'a Token {
+        &self.lines[self.gcur].tokens[self.lcur + n]
+    }
+
+
     pub fn get_identkw(&self) -> Result<&'a str, FirrtlStreamErr> {
         if let Token::IdentKw(s) = self.token() {
-            Ok(&s)
+            Ok(s)
         } else { 
             Err(FirrtlStreamErr::ExpectedToken("expected identkw".to_string()))
+        }
+    }
+    pub fn get_lit_int(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_int() {
+            Ok(lit)
+        } else { 
+            Err(FirrtlStreamErr::ExpectedToken("expected lit int".to_string()))
         }
     }
 

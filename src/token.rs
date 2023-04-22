@@ -9,7 +9,7 @@ pub enum Token {
     IdentKw(String),
 
     #[regex(r#""([^"\\]|\\t|\\u|\\n|\\")*""#, |lex| lex.slice().parse().ok())]
-    StringLiteral(String),
+    LiteralString(String),
 
     #[regex(r#"'([^'\\]|\\t|\\u|\\n|\\|\\')*'"#, |lex| lex.slice().parse().ok())]
     RawString(String),
@@ -59,4 +59,73 @@ impl Token {
     }
 }
 
+impl Token {
+    pub fn is_lit_int(&self) -> bool {
+        matches!(self, Token::LiteralInt(_))
+    }
+    pub fn is_lit_sint(&self) -> bool {
+        matches!(self, Token::LiteralSInt(_))
+    }
+    pub fn is_lit_str(&self) -> bool {
+        matches!(self, Token::LiteralString(_))
+    }
+    pub fn is_raw_str(&self) -> bool {
+        matches!(self, Token::RawString(_))
+    }
+    pub fn is_punc(&self) -> bool { 
+        match self { 
+            Self::Period 
+            | Self::Colon
+            | Self::Question 
+            | Self::LParen 
+            | Self::RParen 
+            | Self::LBrace 
+            | Self::RBrace 
+            | Self::LSquare 
+            | Self::RSquare 
+            | Self::Less 
+            | Self::LessMinus 
+            | Self::LessEqual 
+            | Self::Greater 
+            | Self::Equal 
+            | Self::EqualGreater => true, 
+            _ => false,
+        }
+    }
+    pub fn is_identkw(&self) -> bool { 
+        matches!(self, Token::IdentKw(_))
+    }
+
+    pub fn get_identkw(&self) -> Option<&str> {
+        if let Token::IdentKw(s) = self { Some(s) } else { None }
+    }
+    pub fn get_lit_int(&self) -> Option<&str> {
+        if let Token::LiteralInt(s) = self { Some(s) } else { None }
+    }
+    pub fn get_lit_sint(&self) -> Option<&str> {
+        if let Token::LiteralSInt(s) = self { Some(s) } else { None }
+    }
+    pub fn get_lit_str(&self) -> Option<&str> {
+        if let Token::LiteralString(s) = self { Some(s) } else { None }
+    }
+    pub fn get_raw_str(&self) -> Option<&str> {
+        if let Token::RawString(s) = self { Some(s) } else { None }
+    }
+
+    pub fn match_punc(&self, p: &str) -> Option<bool> {
+        if self.is_punc() {
+            Some(self == &Self::punctuation_from_str(p))
+        } else { 
+            None
+        }
+    }
+    pub fn match_identkw(&self, kw: &str) -> Option<bool> { 
+        if let Token::IdentKw(s) = self { 
+            Some(s.as_str() == kw)
+        } else { 
+            None
+        }
+    }
+
+}
 
