@@ -1,5 +1,6 @@
 
 use logos::Logos;
+use crate::ast;
 
 /// Primitive tokens that might occur in a FIRRTL file
 #[derive(Logos, Debug, PartialEq)]
@@ -130,6 +131,63 @@ impl Token {
             Some(s.as_str() == kw)
         } else { 
             None
+        }
+    }
+
+    pub fn get_unsigned_numeric_literal(&self) -> Option<ast::LiteralNumeric> {
+        match self {
+            Token::LiteralInt(s) => {
+                Some(ast::LiteralNumeric::UInt(s.parse().unwrap()))
+            },
+            Token::LiteralString(s) => {
+                let slice = &s[1..s.len()-1];
+                if let Some(hex_num) = slice.strip_prefix('h') {
+                    Some(ast::LiteralNumeric::UInt(
+                        usize::from_str_radix(hex_num, 16).unwrap())
+                    )
+                }
+                else if let Some(oct_num) = slice.strip_prefix('o') {
+                    Some(ast::LiteralNumeric::UInt(
+                        usize::from_str_radix(oct_num, 8).unwrap())
+                    )
+                }
+                else if let Some(bin_num) = slice.strip_prefix('b') {
+                    Some(ast::LiteralNumeric::UInt(
+                        usize::from_str_radix(bin_num, 2).unwrap())
+                    )
+                } else {
+                    panic!("unexpected numeric unsigned literal format {:?}", s);
+                }
+            },
+            _ => panic!("unexpected token {:?} for unsigned literal", self),
+        }
+    }
+    pub fn get_signed_numeric_literal(&self) -> Option<ast::LiteralNumeric> {
+        match self {
+            Token::LiteralSInt(s) => {
+                Some(ast::LiteralNumeric::SInt(s.parse().unwrap()))
+            },
+            Token::LiteralString(s) => {
+                let slice = &s[1..s.len()-1];
+                if let Some(hex_num) = slice.strip_prefix('h') {
+                    Some(ast::LiteralNumeric::SInt(
+                        isize::from_str_radix(hex_num, 16).unwrap())
+                    )
+                }
+                else if let Some(oct_num) = slice.strip_prefix('o') {
+                    Some(ast::LiteralNumeric::SInt(
+                        isize::from_str_radix(oct_num, 8).unwrap())
+                    )
+                }
+                else if let Some(bin_num) = slice.strip_prefix('b') {
+                    Some(ast::LiteralNumeric::SInt(
+                        isize::from_str_radix(bin_num, 2).unwrap())
+                    )
+                } else {
+                    panic!("unexpected numeric signed literal format {:?}", s);
+                }
+            },
+            _ => panic!("unexpected token {:?} for signed literal", self),
         }
     }
 

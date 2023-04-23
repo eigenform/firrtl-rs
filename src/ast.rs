@@ -2,6 +2,11 @@
 
 pub enum Direction { Input, Output }
 
+pub enum LiteralNumeric {
+    UInt(usize),
+    SInt(isize),
+}
+
 
 pub enum PrimOp2Expr {
     Add, Sub, Mul, Div, Mod,

@@ -1,18 +1,20 @@
 
 use crate::lex::*;
 use crate::ast::*;
-use crate::token;
+use crate::token::Token;
 
 pub enum ParserError {
 }
 
 pub struct FirrtlParser<'a> {
-    stream: &'a mut FirrtlStream<'a>
+    /// The stream of tokens being parsed
+    stream: &'a mut FirrtlStream<'a>,
+
 }
 impl <'a> FirrtlParser<'a> {
     pub fn new(stream: &'a mut FirrtlStream<'a>) -> Self { 
         Self { 
-            stream
+            stream,
         }
     }
 }
@@ -56,6 +58,7 @@ impl <'a> FirrtlParser<'a> {
             assert!(m_indent == module_indent);
 
             if stream.match_identkw("module").is_ok() {
+                stream.clear_module_ctx();
                 stream.next_token();
                 let module_id = stream.get_identkw()?;
                 stream.next_token();
@@ -65,6 +68,7 @@ impl <'a> FirrtlParser<'a> {
                 let module = FirrtlParser::parse_module(stream)?;
             } 
             else if stream.match_identkw("extmodule").is_ok() {
+                stream.clear_module_ctx();
                 stream.next_token();
                 let extmodule_id = stream.get_identkw()?;
                 stream.next_token();
@@ -75,6 +79,7 @@ impl <'a> FirrtlParser<'a> {
                 //unimplemented!("extmodule");
             } 
             else if stream.match_identkw("intmodule").is_ok() {
+                stream.clear_module_ctx();
                 stream.next_token();
                 let intmodule_id = stream.get_identkw()?;
                 stream.next_token();
@@ -219,18 +224,29 @@ impl <'a> FirrtlParser<'a> {
                 break;
             }
 
-            // FIXME: Not clear if this is sufficient to disambiguate 
-            // statements that start with a reference?
-            let is_reference_stmt = (
-                stream.remaining_tokens().contains(&token::Token::LessEqual) ||
-                stream.remaining_tokens().contains(&token::Token::LessMinus) ||
-                stream.remaining_tokens().windows(2).position(|w| { w == 
-                    &[
-                        token::Token::IdentKw("is".to_string()), 
-                        token::Token::IdentKw("invalid".to_string())
-                    ]
-                }).is_some()
-            );
+            //// All statements *must* start with some Token::IdentKw
+            //let first_idkw = stream.get_identkw()?;
+            //// If this is a valid identifier in the current module,
+            //// 'first_idkw' might be a *reference* to something
+            //let valid_symbol = stream.check_module_ctx(first_idkw);
+            //// FIXME: Not clear if this is sufficient to disambiguate 
+            //// statements that start with a reference?
+            //// 
+            //// NOTE: '<=' and 'is invalid' will be deprecated eventually.
+            ////
+            //// FIXME: This incorrectly matches 'when' statements
+            //let is_reference_stmt = (
+            //    stream.remaining_tokens().contains(&Token::LessEqual) ||
+            //    stream.remaining_tokens().contains(&Token::LessMinus) ||
+            //    stream.remaining_tokens().windows(2).position(|w| { w == 
+            //        &[
+            //            Token::IdentKw("is".to_string()), 
+            //            Token::IdentKw("invalid".to_string())
+            //        ]
+            //    }).is_some()
+            //);
+
+            let is_reference_stmt = FirrtlParser::check_reference(stream);
 
             if is_reference_stmt {
                 println!("[*] Parsing reference statement: {:?}", stream.line().content());
@@ -261,7 +277,8 @@ impl <'a> FirrtlParser<'a> {
                 match stream.get_identkw()? {
                     "wire" => {
                         stream.next_token();
-                        let id = stream.get_identkw()?;
+                        let wire_id = stream.get_identkw()?;
+                        stream.add_module_ctx(wire_id);
                         stream.next_token();
                         stream.match_punc(":")?;
                         stream.next_token();
@@ -271,7 +288,8 @@ impl <'a> FirrtlParser<'a> {
                     "inst" => { unimplemented!("inst"); },
                     "node" => { 
                         stream.next_token();
-                        let id = stream.get_identkw()?;
+                        let node_id = stream.get_identkw()?;
+                        stream.add_module_ctx(node_id);
                         stream.next_token();
                         stream.match_punc("=")?;
                         stream.next_token();
@@ -390,7 +408,15 @@ impl <'a> FirrtlParser<'a> {
             stream.next_token();
             let width = FirrtlParser::parse_optional_typewidth(stream)?;
             stream.match_punc("(")?;
-            unimplemented!("expr literal");
+            stream.next_token();
+            let lit_val = match sint_or_uint {
+                "SInt" => stream.token().get_signed_numeric_literal(),
+                "UInt" => stream.token().get_unsigned_numeric_literal(),
+                _ => unreachable!(),
+            };
+            stream.next_token();
+            stream.match_punc(")")?;
+            stream.next_token();
         }
         else if is_read_expr {
             unimplemented!("expr read");
@@ -439,6 +465,42 @@ impl <'a> FirrtlParser<'a> {
         Ok(())
         //unimplemented!("expr");
     }
+
+    /// Determine if the following tokens qualify as a "reference"
+    fn check_reference(stream: &mut FirrtlStream<'a>) -> bool {
+        // References always start with Token::IdentKw
+        if let Ok(idkw) = stream.get_identkw() {
+            // If this is *not* a previously-declared identifier in the
+            // current module, we're dealing with something else
+            if !stream.check_module_ctx(idkw) {
+                return false;
+            }
+
+            // Check the remaining tokens. The only valid cases are:
+            //  - ident . 
+            //  - ident [ 
+            //  - ident <= 
+            //  - ident <-
+            //  - ident is invalid
+            //
+            let rem = &stream.remaining_tokens()[1..];
+            if rem.starts_with(&[Token::Period]) { true } 
+            else if rem.starts_with(&[Token::LSquare]) { true } 
+            else if rem.starts_with(&[Token::LessEqual]) { true } 
+            else if rem.starts_with(&[Token::LessMinus]) { true } 
+            else if rem.starts_with(&[Token::IdentKw("is".to_string()), 
+                                      Token::IdentKw("invalid".to_string())]) 
+            {
+                true
+            } 
+            else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
 
     fn parse_reference(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
@@ -532,6 +594,8 @@ impl <'a> FirrtlParser<'a> {
 
             let port_id = stream.get_identkw()?;
             stream.next_token();
+            stream.add_module_ctx(port_id);
+
             stream.match_punc(":")?;
             stream.next_token();
             let port_type = FirrtlParser::parse_type(stream)?;

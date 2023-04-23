@@ -1,5 +1,6 @@
 
 use std::ops::Range;
+use std::collections::BTreeSet;
 use logos::Logos;
 
 use crate::file::*;
@@ -108,6 +109,12 @@ pub enum FirrtlStreamErr {
 
 pub struct FirrtlStream<'a> {
     lines: &'a [FirrtlTokenizedLine],
+
+    /// Per-module context for resolving ambiguity between identifiers
+    /// and keywords
+    module_ctx: BTreeSet<&'a str>,
+
+    /// Number of tokens
     length: usize,
     gcur: usize,
     lcur: usize,
@@ -117,10 +124,22 @@ impl <'a> FirrtlStream<'a> {
         Self { 
             lines,
             length: lines.len(),
+            module_ctx: BTreeSet::new(),
             gcur: 0,
             lcur: 0,
         }
     }
+
+    pub fn clear_module_ctx(&mut self) {
+        self.module_ctx.clear();
+    }
+    pub fn check_module_ctx(&self, kw: &'a str) -> bool {
+        self.module_ctx.get(kw).is_some()
+    }
+    pub fn add_module_ctx(&mut self, kw: &'a str) {
+        self.module_ctx.insert(kw);
+    }
+
     pub fn next_token(&mut self) {
         if self.lcur == self.line().len() - 1 {
             println!("[*] Moved to next line");
