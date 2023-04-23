@@ -1,9 +1,10 @@
+#![allow(unused_parens)]
 
-pub mod file;
-pub mod token;
-pub mod lex;
-pub mod parse;
-pub mod ast;
+mod file;
+mod token;
+mod lex;
+mod parse;
+mod ast;
 
 #[cfg(test)]
 mod tests {
