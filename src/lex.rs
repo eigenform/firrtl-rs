@@ -6,46 +6,60 @@ use logos::Logos;
 use crate::file::*;
 use crate::token::*;
 
-/// A "tokenized" line in some [FirrtlFile], with optional FIRRTL file info.
+/// A fully-tokenized FIRRTL line, corresponding to a single [FirrtlLine] 
+/// contained in a [FirrtlFile]. 
+///
+/// # Implementation Details
+///
+/// - Indentation for the line is separate from the list of tokens
+/// - FIRRTL "file info" is separate from the list of tokens
+///
 #[derive(Debug)]
 pub struct FirrtlTokenizedLine {
     /// List of tokens
     tokens: Vec<Token>,
-
-    /// The original string before tokenization
-    content: String,
-
-    /// List of spans [in the original source .fir file] for tokens
-    spans: Vec<Range<usize>>,
-
-    /// Optional source file info embedded in FIRRTL
-    info: Option<String>,
-
-    /// Original line number in the source .fir file
-    sf_line: usize,
-
     /// Indentation level of this line
     indent_level: usize,
+    /// Optional FIRRTL-defined source file info
+    info: Option<String>,
+    /// Original line number in the source .fir file
+    sf_line: usize,
+    /// The span of each [Token] in the original source file content
+    spans: Vec<Range<usize>>,
+    /// The original string before tokenization
+    content: String,
 }
 impl FirrtlTokenizedLine {
+    /// Returns the indentation level of this line
     pub fn indent_level(&self) -> usize { 
         self.indent_level
     }
+    /// Returns the corresponding line number in the original source file
     pub fn line_number(&self) -> usize { 
         self.sf_line
     }
+    /// Returns the number of tokens in this line
     pub fn len(&self) -> usize { 
         self.tokens.len()
     }
+    /// Returns the content that produced this tokenized line
     pub fn content(&self) -> &str { 
         &self.content
     }
 }
 
+/// Used to convert a [FirrtlFile] into a set of [FirrtlTokenizedLine].
+///
+/// # Implementation Details
+///
+/// It's a lot easier to deal with things line-by-line, since FIRRTL
+/// depends on indentation (and otherwise doesn't care about whitespace).
+///
 pub struct FirrtlLexer;
 impl FirrtlLexer {
-    // It's a lot easier to deal with things line-by-line, since FIRRTL
-    // depends on indentation (and doesn't care about whitespace otherwise). 
+
+    /// Tokenize each [FirrtlLine] in the provided [FirrtlFile], producing a 
+    /// list of [FirrtlTokenizedLine].
     pub fn lex(sf: &FirrtlFile) -> Vec<FirrtlTokenizedLine> {
         let mut tokenized_lines = Vec::new();
 
@@ -54,12 +68,12 @@ impl FirrtlLexer {
             let sf_line_start = sfl.line_start();
             let indent_level  = sfl.indent_level();
 
-            // File info optionally comes at the end of a line. 
-            // Separate actual line content from FIRRTL file info.
-            let (content, info) = if let Some(idx) = sfl.line.find('@') {
-                (&sfl.line[..idx], Some(sfl.line[idx..].to_string()))
+            // FIRRTL "file info" optionally comes at the end of a line. 
+            // Separate meaningful line content from any file info.
+            let (content, info) = if let Some(idx) = sfl.contents().find('@') {
+                (&sfl.contents()[..idx], Some(sfl.contents()[idx..].to_string()))
             } else {
-                (sfl.line.as_str(), None)
+                (sfl.contents(), None)
             };
 
             // Extract a set of tokens/spans from each line
@@ -76,6 +90,8 @@ impl FirrtlLexer {
                         tokens.push(token);
                         spans.push(token_span);
                     },
+                    // Some error occured while tokenizing this line.
+                    // FIXME: Proper error-handling instead of panic!()
                     Err(e) => {
                         println!("{:?}", e);
                         panic!("unknown token at line {}, offset {:?}",
@@ -102,21 +118,22 @@ pub enum FirrtlStreamErr {
     ExpectedToken(String),
     ExpectedKeyword(String),
     ExpectedPunctuation(String),
-
     Other(&'static str),
 }
 
-
+/// State used to implement a parser over some set of [FirrtlTokenizedLine].
 pub struct FirrtlStream<'a> {
+    /// The set of tokenized lines in the stream
     lines: &'a [FirrtlTokenizedLine],
-
-    /// Per-module context for resolving ambiguity between identifiers
-    /// and keywords
-    module_ctx: BTreeSet<&'a str>,
-
-    /// Number of tokens
+    /// The total number of tokenized lines in the stream
     length: usize,
+
+    /// Per-module context for allowing a parser to resolve ambiguity between 
+    /// "identifiers" and "keywords"
+    module_ctx: BTreeSet<&'a str>,
+    /// The index of the current line
     gcur: usize,
+    /// The index of the current token [within the current line]
     lcur: usize,
 }
 impl <'a> FirrtlStream<'a> {

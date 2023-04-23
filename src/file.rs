@@ -1,5 +1,4 @@
 
-
 /// A suitably-trimmed "line" (without comments) in some [FirrtlFile].
 #[derive(Debug)]
 pub struct FirrtlLine {
@@ -8,7 +7,7 @@ pub struct FirrtlLine {
     /// Index of the first relevant character in the original source file
     line_start: usize,
     /// Contents (hopefully meaningful tokens)
-    pub line: String,
+    line: String,
 }
 impl FirrtlLine {
     pub fn indent_level(&self) -> usize {
@@ -25,7 +24,7 @@ impl FirrtlLine {
     }
 }
 
-/// Representing input from a FIRRTL source file. 
+/// Representing input from a FIRRTL (.fir) source file.
 pub struct FirrtlFile {
     /// Source filename
     pub filename: String,
@@ -45,6 +44,8 @@ impl FirrtlFile {
         c == &' ' || c == &'\t' || c == &','
     }
 
+    /// Given some string containing the contents of a .fir file, produce a 
+    /// list of lines ([FirrtlLine]) that contain meaningful data.
     fn read_lines(content: &str) -> Vec<FirrtlLine> {
         let mut res = Vec::new();
 
@@ -59,14 +60,14 @@ impl FirrtlFile {
             // Actual line contents start *after* any indentation
             let post_indent_line = &line[indent_level..]; 
 
-            // Line contents occur *before* any comment
+            // Meaningful line contents occur *before* any comment
             let line_content = if let Some(i) = post_indent_line.find(';') {
                 &post_indent_line[..i]
             } else {
                 post_indent_line
             };
 
-            // Ignore any empty lines
+            // Ignore any lines without meaningful content
             if line_content.is_empty() { 
                 continue; 
             }

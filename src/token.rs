@@ -2,25 +2,37 @@
 use logos::Logos;
 use crate::ast;
 
-/// Primitive tokens that might occur in a FIRRTL file
+/// A primitive token that might occur in a FIRRTL file.
+///
+/// NOTE: There isn't exactly a hard distinction between variable names
+/// ("identifiers") and "keywords" in FIRRTL. Since this usually depends 
+/// on some context, it makes more sense for us to treat these as the 
+/// same underlying token ([Token::IdentKw]).
+///
 #[derive(Logos, Debug, PartialEq)]
 #[logos(skip r"[ \t,]+")]
 pub enum Token {
+    /// An "identifier" or a "keyword"
     #[regex("[a-zA-Z_][a-zA-Z0-9_$-]*", |lex| lex.slice().parse().ok())]
     IdentKw(String),
 
+    /// A double-quoted literal string
     #[regex(r#""([^"\\]|\\t|\\u|\\n|\\")*""#, |lex| lex.slice().parse().ok())]
     LiteralString(String),
 
+    /// A single-quoted literal string
     #[regex(r#"'([^'\\]|\\t|\\u|\\n|\\|\\')*'"#, |lex| lex.slice().parse().ok())]
     RawString(String),
 
+    /// A literal integer value
     #[regex("[0-9]+", |lex| lex.slice().parse().ok())]
     LiteralInt(String),
 
+    /// A literal floating-point value
     #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse().ok())]
     LiteralFloat(String),
 
+    /// A literal signed integer value
     #[regex("[+-][0-9]+", |lex| lex.slice().parse().ok())]
     LiteralSInt(String),
 

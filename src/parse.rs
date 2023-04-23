@@ -224,30 +224,7 @@ impl <'a> FirrtlParser<'a> {
                 break;
             }
 
-            //// All statements *must* start with some Token::IdentKw
-            //let first_idkw = stream.get_identkw()?;
-            //// If this is a valid identifier in the current module,
-            //// 'first_idkw' might be a *reference* to something
-            //let valid_symbol = stream.check_module_ctx(first_idkw);
-            //// FIXME: Not clear if this is sufficient to disambiguate 
-            //// statements that start with a reference?
-            //// 
-            //// NOTE: '<=' and 'is invalid' will be deprecated eventually.
-            ////
-            //// FIXME: This incorrectly matches 'when' statements
-            //let is_reference_stmt = (
-            //    stream.remaining_tokens().contains(&Token::LessEqual) ||
-            //    stream.remaining_tokens().contains(&Token::LessMinus) ||
-            //    stream.remaining_tokens().windows(2).position(|w| { w == 
-            //        &[
-            //            Token::IdentKw("is".to_string()), 
-            //            Token::IdentKw("invalid".to_string())
-            //        ]
-            //    }).is_some()
-            //);
-
             let is_reference_stmt = FirrtlParser::check_reference(stream);
-
             if is_reference_stmt {
                 println!("[*] Parsing reference statement: {:?}", stream.line().content());
                 let reference = FirrtlParser::parse_reference(stream)?;
@@ -296,7 +273,14 @@ impl <'a> FirrtlParser<'a> {
                         let expr = FirrtlParser::parse_expr(stream)?;
                     },
                     "attach" => { unimplemented!("attach"); },
-                    "when" => { unimplemented!("when"); },
+                    "when" => { 
+                        stream.next_token();
+                        let expr = FirrtlParser::parse_expr(stream)?;
+                        stream.match_punc(":")?;
+                        stream.next_token();
+                        println!("{:?}", stream.remaining_tokens());
+                        unimplemented!("when"); 
+                    },
                     "stop" => { unimplemented!("stop"); },
                     "printf" => { unimplemented!("printf"); },
                     "skip" => { 
