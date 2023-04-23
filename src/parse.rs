@@ -53,7 +53,6 @@ impl <'a> FirrtlParser<'a> {
 
         loop {
             assert!(stream.is_sol());
-            println!("{:?}", stream.line().content());
             let m_indent = stream.indent_level();
             assert!(m_indent == module_indent);
 
@@ -206,100 +205,238 @@ impl <'a> FirrtlParser<'a> {
             return Ok(());
         }
 
-        let stmt_line = FirrtlParser::parse_statements(stream)?;
+        let stmt_list = FirrtlParser::parse_statements_block(stream)?;
         assert!(stream.is_sol());
 
         Ok(())
     }
 
-    fn parse_statements(stream: &mut FirrtlStream<'a>)
+    fn parse_statements_block(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
         let body_indent_level = stream.indent_level();
         loop {
+            println!("handling statement in block: {:?}", stream.line().content());
             assert!(stream.is_sol());
-            println!("[*] Parsing statement: {:?}", stream.line().content());
-
             if stream.indent_level() < body_indent_level {
                 break;
             }
-
-            let is_reference_stmt = FirrtlParser::check_reference(stream);
-            if is_reference_stmt {
-                println!("[*] Parsing reference statement: {:?}", stream.line().content());
-                let reference = FirrtlParser::parse_reference(stream)?;
-                // Must be an assignment '<=', this is an identifier
-                if stream.match_punc("<=").is_ok() {
-                    stream.next_token();
-                    let expr = FirrtlParser::parse_expr(stream)?;
-                } 
-                // Must be a partial assignment '<-'?,
-                else if stream.match_punc("<-").is_ok() {
-                    stream.next_token();
-                    let expr = FirrtlParser::parse_expr(stream)?;
-                }
-                // Must be 'is invalid', this is an identifier
-                else if stream.match_identkw("is").is_ok() {
-                    stream.next_token();
-                    stream.match_identkw("invalid")?;
-                    stream.next_token();
-                } else { 
-                    panic!("unexpected keyword in reference statement?");
-                }
-                assert!(stream.is_sol(), "{:?}", stream.remaining_tokens());
-            } 
-            // Otherwise, this is a "simple" statement where we can just 
-            // match on some keyword
-            else {
-                match stream.get_identkw()? {
-                    "wire" => {
-                        stream.next_token();
-                        let wire_id = stream.get_identkw()?;
-                        stream.add_module_ctx(wire_id);
-                        stream.next_token();
-                        stream.match_punc(":")?;
-                        stream.next_token();
-                        let ty = FirrtlParser::parse_type(stream)?;
-                    },
-                    "reg"  => { unimplemented!("reg"); },
-                    "inst" => { unimplemented!("inst"); },
-                    "node" => { 
-                        stream.next_token();
-                        let node_id = stream.get_identkw()?;
-                        stream.add_module_ctx(node_id);
-                        stream.next_token();
-                        stream.match_punc("=")?;
-                        stream.next_token();
-                        let expr = FirrtlParser::parse_expr(stream)?;
-                    },
-                    "attach" => { unimplemented!("attach"); },
-                    "when" => { 
-                        stream.next_token();
-                        let expr = FirrtlParser::parse_expr(stream)?;
-                        stream.match_punc(":")?;
-                        stream.next_token();
-                        println!("{:?}", stream.remaining_tokens());
-                        unimplemented!("when"); 
-                    },
-                    "stop" => { unimplemented!("stop"); },
-                    "printf" => { unimplemented!("printf"); },
-                    "skip" => { 
-                        stream.next_token();
-                    },
-                    "define" => { unimplemented!("define"); },
-                    "force_release" => { unimplemented!("force_release"); },
-                    "connect" => { unimplemented!("connect"); },
-                    "invalidate" => { unimplemented!("invalidate"); },
-                    identkw @ _ => {
-                        panic!("unexpected statement keyword {}", identkw);
-                    },
-                }
-                assert!(stream.is_sol());
-            }
-
+            let statement = FirrtlParser::parse_statement(stream)?;
         }
-        //panic!("statements end?");
         Ok(())
+    }
+
+    fn parse_statement(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        println!("parsing statement @ {:?}", stream.remaining_tokens());
+        // We have to check for statements that begin with a 'reference'
+        // first. Otherwise, this is a "simple" statement where we can 
+        // just match on some keyword
+        if FirrtlParser::check_reference(stream) {
+            let ref_stmt = FirrtlParser::parse_reference_stmt(stream)?;
+            Ok(())
+        } else {
+            match stream.get_identkw()? {
+                "wire"   => FirrtlParser::parse_wire_stmt(stream)?,
+                "reg"    => unimplemented!("reg"),
+                "inst"   => unimplemented!("inst"),
+                "node"   => FirrtlParser::parse_node_stmt(stream)?,
+                "attach" => unimplemented!("attach"),
+                "when"   => FirrtlParser::parse_when_stmt(stream)?,
+                "stop"   => FirrtlParser::parse_stop_stmt(stream)?,
+                "printf" => FirrtlParser::parse_printf_stmt(stream)?,
+                "skip"   => stream.next_token(),
+                "define" => unimplemented!("define"),
+                "force_release" => unimplemented!("force_release"),
+                "connect"    => unimplemented!("connect"),
+                "invalidate" => unimplemented!("invalidate"),
+                identkw @ _ => {
+                    panic!("unexpected statement keyword {}", identkw);
+                },
+            }
+            Ok(())
+        }
+    }
+
+    fn parse_printf_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        unimplemented!("printf");
+    }
+
+    fn parse_stop_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        stream.match_identkw("stop")?;
+        stream.next_token();
+        stream.match_punc("(")?;
+        stream.next_token();
+        let e1 = FirrtlParser::parse_expr(stream)?;
+        let e2 = FirrtlParser::parse_expr(stream)?;
+        let lit = stream.get_lit_int()?;
+        stream.next_token();
+        stream.match_punc(")")?;
+        stream.next_token();
+
+        // FIXME: Apparently theres an optional ': ident' at the end of this?
+        if stream.match_punc(":").is_ok() {
+            stream.next_token();
+            let _ = stream.get_identkw()?;
+            stream.next_token();
+        }
+        Ok(())
+    }
+
+
+    fn parse_reference_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        println!("parsing reference stmt @ {:?}", stream.remaining_tokens());
+        let reference = FirrtlParser::parse_reference(stream)?;
+        // Must be an assignment '<=', this is an identifier
+        if stream.match_punc("<=").is_ok() {
+            stream.next_token();
+            let expr = FirrtlParser::parse_expr(stream)?;
+        } 
+        // Must be a partial assignment '<-'?,
+        else if stream.match_punc("<-").is_ok() {
+            stream.next_token();
+            let expr = FirrtlParser::parse_expr(stream)?;
+        }
+        // Must be 'is invalid', this is an identifier
+        else if stream.match_identkw("is").is_ok() {
+            stream.next_token();
+            stream.match_identkw("invalid")?;
+            stream.next_token();
+        } else { 
+            panic!("unexpected keyword in reference statement?");
+        }
+        Ok(())
+    }
+
+    fn parse_wire_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        stream.match_identkw("wire")?;
+        stream.next_token();
+        let wire_id = stream.get_identkw()?;
+        stream.add_module_ctx(wire_id);
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+        let ty = FirrtlParser::parse_type(stream)?;
+        Ok(())
+    }
+
+    fn parse_node_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        stream.match_identkw("node")?;
+        stream.next_token();
+        let node_id = stream.get_identkw()?;
+        stream.add_module_ctx(node_id);
+        stream.next_token();
+        stream.match_punc("=")?;
+        stream.next_token();
+        let expr = FirrtlParser::parse_expr(stream)?;
+        Ok(())
+    }
+
+
+    fn parse_when_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        let current_indent = stream.indent_level();
+
+        stream.match_identkw("when")?;
+        stream.next_token();
+        let expr_cond = FirrtlParser::parse_expr(stream)?;
+        stream.match_punc(":")?;
+        stream.next_token();
+
+        // Have we reached the start of a new line?
+        if stream.is_sol() {
+            // This must be a block of statements
+            assert!(stream.indent_level() > current_indent);
+            let statements = FirrtlParser::parse_statements_block(stream)?;
+            println!("Finished when block");
+
+            assert!(stream.is_sol());
+            println!("{:?}", stream.remaining_tokens());
+            loop {
+                if stream.indent_level() < current_indent {
+                    panic!("uhhh");
+                }
+
+                println!("{:?}", stream.remaining_tokens());
+
+                if stream.match_identkw("else").is_ok() {
+                    stream.next_token();
+
+                    // This terminates the list of conditional blocks
+                    if stream.match_punc(":").is_ok() {
+                        stream.next_token();
+                        let blk = FirrtlParser::parse_statements_block(stream)?;
+                        break;
+                    }
+
+                    // Add to the list of conditional blocks
+                    if stream.match_identkw("when").is_ok() {
+                        stream.next_token();
+                        let expr_elsewhen = FirrtlParser::parse_expr(stream)?;
+                        stream.match_punc(":")?;
+                        stream.next_token();
+                        let blk = FirrtlParser::parse_statements_block(stream)?;
+                        continue;
+                    }
+                } else { 
+                    break;
+                }
+            }
+            Ok(())
+
+            //if stream.match_identkw("else").is_ok() {
+            //    stream.next_token();
+
+            //    if stream.match_identkw("when").is_ok() { 
+            //        stream.next_token();
+            //        let expr_elsewhen = FirrtlParser::parse_expr(stream)?;
+            //    }
+            //    stream.match_punc(":")?;
+            //    stream.next_token();
+            //    let statements = FirrtlParser::parse_statements_block(stream)?;
+            //    Ok(())
+            //} 
+            //else {
+            //    Ok(())
+            //}
+
+        } 
+        // If there are still tokens on this line, this must be the case 
+        // with a single statement on the same line
+        else {
+            println!("{:?}", stream.remaining_tokens());
+            let stmt = FirrtlParser::parse_statement(stream)?;
+            println!("{:?}", stream.remaining_tokens());
+
+            if stream.is_sol() {
+                unimplemented!();
+                Ok(())
+            } else { 
+                // This must be 'else' with a single statement
+                if stream.match_identkw("else").is_ok() {
+                    stream.next_token();
+                    stream.match_punc(":")?;
+                    stream.next_token();
+                    let else_stmt = FirrtlParser::parse_statement(stream)?;
+                    Ok(())
+                } 
+                else {
+                    Ok(())
+                }
+            }
+        }
     }
 
     fn parse_expr(stream: &mut FirrtlStream<'a>)
@@ -506,14 +643,16 @@ impl <'a> FirrtlParser<'a> {
         -> Result<(), FirrtlStreamErr>
     {
 
+        println!("parsing static reference @ {:?}", 
+                 stream.remaining_tokens()
+        );
+
         // Static references *must* begin with an identifier
         let ref_ident = stream.get_identkw()?;
         stream.next_token();
 
         // ... followed by some arbitrary list of subfield/subindex
         loop {
-            println!("Parsing static reference {:?}", stream.remaining_tokens());
-
             // Must be a subfield access
             if stream.match_punc(".").is_ok() {
                 stream.next_token();
