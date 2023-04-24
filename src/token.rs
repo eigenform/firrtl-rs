@@ -179,6 +179,9 @@ impl Token {
             Token::LiteralSInt(s) => {
                 Some(ast::LiteralNumeric::SInt(s.parse().unwrap()))
             },
+            Token::LiteralInt(s) => {
+                Some(ast::LiteralNumeric::SInt(s.parse().unwrap()))
+            },
             Token::LiteralString(s) => {
                 let slice = &s[1..s.len()-1];
                 if let Some(hex_num) = slice.strip_prefix('h') {

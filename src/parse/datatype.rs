@@ -80,44 +80,70 @@ impl <'a> FirrtlParser {
     pub fn parse_type(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr>
     {
-        // This is a bundle type
-        if stream.match_punc("{").is_ok() {
-            let bundle_type = FirrtlParser::parse_bundle(stream)?;
-            //unimplemented!("bundle");
-        } 
-        // This is some ground type
-        else {
-            let ground_type = stream.get_identkw()?;
-            let maybe_width = match ground_type {
-                "UInt" | "SInt" | "Analog" => true,
-                "Clock" | "Reset" | "AsyncReset" => false,
-                _ => return Err(FirrtlStreamErr::Other("bad ground type?")),
-            };
-            stream.next_token();
 
-            let width = if maybe_width {
-                FirrtlParser::parse_optional_typewidth(stream)?
+        // Probe/RWProbe
+        if stream.match_identkw("Probe").is_ok() {
+            stream.next_token();
+            stream.match_punc("<")?;
+            stream.next_token();
+            let prb_type = FirrtlParser::parse_type(stream)?;
+            stream.match_punc(">")?;
+            stream.next_token();
+            return Ok(());
+
+        } else if stream.match_identkw("RWProbe").is_ok() {
+            stream.next_token();
+            stream.match_punc("<")?;
+            stream.next_token();
+            let prb_type = FirrtlParser::parse_type(stream)?;
+            stream.match_punc(">")?;
+            stream.next_token();
+            return Ok(());
+        } 
+        // Otherwise, this is a ground/aggregate type
+        else {
+            let is_const = if stream.match_identkw("const").is_ok() {
+                stream.next_token();
+                true
             } else {
+                false
+            };
+
+            // This is a bundle type
+            if stream.match_punc("{").is_ok() {
+                let bundle_type = FirrtlParser::parse_bundle(stream)?;
+                //unimplemented!("bundle");
+            } 
+            // This is some ground type
+            else {
+                let ground_type = stream.get_identkw()?;
+                let maybe_width = match ground_type {
+                    "UInt" | "SInt" | "Analog" => true,
+                    "Clock" | "Reset" | "AsyncReset" => false,
+                    _ => return Err(FirrtlStreamErr::Other("bad ground type?")),
+                };
+                stream.next_token();
+                let width = if maybe_width {
+                    FirrtlParser::parse_optional_typewidth(stream)?
+                } else {
+                    None
+                };
+            }
+
+            // Optionally indicates an array type.
+            let arrwidth = if stream.match_punc("[").is_ok() {
+                stream.next_token();
+                let w = stream.get_lit_int()?;
+                stream.next_token();
+                stream.match_punc("]")?;
+                stream.next_token();
+                Some(w.parse::<usize>().unwrap())
+            } else { 
                 None
             };
         }
-
-        // NOTE: Array/vector types can also be of bundles.
-        // Optionally indicates an array type.
-        let arrwidth = if stream.match_punc("[").is_ok() {
-            stream.next_token();
-            let w = stream.get_lit_int()?;
-            stream.next_token();
-            stream.match_punc("]")?;
-            stream.next_token();
-            Some(w.parse::<usize>().unwrap())
-        } else { 
-            None
-        };
-
         Ok(())
     }
-
 }
 
 

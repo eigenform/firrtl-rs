@@ -254,12 +254,33 @@ impl <'a> FirrtlStream<'a> {
         }
     }
 
+    pub fn get_lit_raw_str(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_raw_str() {
+            Ok(lit)
+        } else {
+            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
+        }
+    }
+
+
     pub fn match_identkw(&self, kw: &'a str) -> Result<(), FirrtlStreamErr> {
         let idkw = self.get_identkw()?;
         if idkw == kw {
             Ok(())
         } else { 
             Err(FirrtlStreamErr::ExpectedKeyword(kw.to_string()))
+        }
+    }
+
+    pub fn match_identkw_multi(&self, kw: &[&'a str]) 
+        -> Result<&'a str, FirrtlStreamErr>
+    {
+        let idkw = self.get_identkw()?;
+        if let Some(m) = kw.iter().find(|k| *k == &idkw) {
+            Ok(m)
+        } else {
+            let estr = format!("{:?}", kw);
+            Err(FirrtlStreamErr::ExpectedKeyword(estr))
         }
     }
 

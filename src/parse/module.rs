@@ -58,24 +58,24 @@ impl <'a> FirrtlParser {
         let port_list = FirrtlParser::parse_portlist(stream)?;
         assert!(stream.is_sol());
 
+        // FIXME: These have a definite order in the spec
         loop { 
             // End of extmodule
             if stream.indent_level() < body_indent_level {
                 break;
             }
+
             // Start of parameters
             if stream.match_identkw("parameter").is_ok() {
-                break;
+                let parameter = FirrtlParser::parse_parameter(stream)?;
+            } 
+            else if stream.match_identkw("defname").is_ok() {
+                let defname = FirrtlParser::parse_defname(stream)?;
+            } 
+            // FIXME: Skip 'ref' declarations for now
+            else if stream.match_identkw("ref").is_ok() {
+                stream.next_line();
             }
-            let defname = FirrtlParser::parse_defname(stream)?;
-        }
-
-        loop { 
-            // End of extmodule
-            if stream.indent_level() < body_indent_level {
-                break;
-            }
-            let parameter = FirrtlParser::parse_parameter(stream)?;
         }
         Ok(())
     }
@@ -107,11 +107,19 @@ impl <'a> FirrtlParser {
             stream.next_token();
             assert!(stream.is_sol());
         } 
+        else if let Ok(lit) = stream.get_lit_sint() {
+            stream.next_token();
+            assert!(stream.is_sol());
+        }
         else if let Ok(lit) = stream.get_lit_float() {
             stream.next_token();
             assert!(stream.is_sol());
         } 
         else if let Ok(lit) = stream.get_lit_str() {
+            stream.next_token();
+            assert!(stream.is_sol());
+        }
+        else if let Ok(lit) = stream.get_lit_raw_str() {
             stream.next_token();
             assert!(stream.is_sol());
         } else {

@@ -73,6 +73,14 @@ impl <'a> FirrtlParser {
         }
     }
 
+    // FIXME: Do we need to handle postfix operations (indexing/subfields)
+    // for arbitrary expressions? I don't think this is in the spec, but
+    // there's at least one case in CIRCT tests, ie. 
+    //
+    //  wire agg2 : { a : UInt, flip b : UInt<1> }
+    //  ...
+    //  out2 <= read(probe(agg2)).b
+    //
     pub fn parse_expr(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
@@ -103,6 +111,7 @@ impl <'a> FirrtlParser {
             panic!("unable to disambiguate expression? {:?}", 
                 stream.remaining_tokens());
         }
+        println!("finished expr, {:?}", stream.remaining_tokens());
         Ok(())
     }
 
@@ -122,10 +131,17 @@ impl <'a> FirrtlParser {
         stream.next_token();
         Ok(())
     }
+
     pub fn parse_read_expr(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr>
     {
-        panic!("read");
+        stream.match_identkw("read")?;
+        stream.next_token();
+        stream.match_punc("(")?;
+        stream.next_token();
+        let ref_expr = FirrtlParser::parse_ref_expr(stream)?;
+        stream.match_punc(")")?;
+        stream.next_token();
         Ok(())
     }
 
@@ -225,12 +241,9 @@ impl <'a> FirrtlParser {
         }
     }
 
-
-    pub fn parse_reference(stream: &mut FirrtlStream<'a>)
+    pub fn parse_static_reference(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        println!("parsing reference @ {:?}", stream.remaining_tokens());
-
         // References *must* begin with an identifier
         let ref_ident = stream.get_identkw()?;
         stream.next_token();
@@ -266,8 +279,19 @@ impl <'a> FirrtlParser {
                 break;
             }
         }
+        Ok(())
+    }
 
-        // Dynamic index
+
+    pub fn parse_reference(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        println!("parsing reference @ {:?}", stream.remaining_tokens());
+
+        // All references are *at least* composed of a static reference
+        let static_ref = FirrtlParser::parse_static_reference(stream)?;
+
+        // Optional dynamic indexing with some expression
         if stream.match_punc("[").is_ok() {
             stream.next_token();
             let index_expr = FirrtlParser::parse_expr(stream)?;
@@ -277,6 +301,30 @@ impl <'a> FirrtlParser {
 
         Ok(())
     }
+
+    pub fn parse_ref_expr(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+
+        // This must be 'probe(<static_ref>)' or 'rwprobe(<static_ref>)'
+        if stream.peekn_token(1).match_punc("(").unwrap_or(false) {
+            let kw = stream.match_identkw_multi(&["probe", "rwprobe"])?;
+            stream.next_token();
+            stream.match_punc("(")?;
+            stream.next_token();
+            let static_ref = FirrtlParser::parse_static_reference(stream)?;
+            stream.match_punc(")")?;
+            stream.next_token();
+            Ok(())
+        } 
+        // Otherwise this is just a static reference
+        else {
+            let static_ref = FirrtlParser::parse_static_reference(stream)?;
+            Ok(())
+        }
+    }
+
+
 }
 
 
