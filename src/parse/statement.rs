@@ -34,6 +34,8 @@ impl <'a> FirrtlParser {
                     => FirrtlParser::parse_wire_stmt(stream)?,
                 "reg"
                     => FirrtlParser::parse_reg_stmt(stream)?,
+                "mem"
+                    => FirrtlParser::parse_mem_stmt(stream)?,
                 "inst"
                     => FirrtlParser::parse_inst_stmt(stream)?,
                 "node"
@@ -56,6 +58,22 @@ impl <'a> FirrtlParser {
                     => FirrtlParser::parse_connect_stmt(stream)?,
                 "invalidate"
                     => FirrtlParser::parse_invalidate_stmt(stream)?,
+
+                // FIXME: These are old SFC statements that I don't want
+                // to deal with right now
+                "cmem" | "smem" => { 
+                    stream.next_line(); 
+                },
+                "infer" | "read" | "write" | "rdwr" => {
+                    stream.next_line();
+                },
+
+                // FIXME: These are verification statements that aren't
+                // properly in the spec yet
+                "assert" | "assume" | "cover" => {
+                    stream.next_line();
+                },
+
                 identkw @ _ => {
                     panic!("unexpected statement keyword {}", identkw);
                 },
@@ -64,15 +82,184 @@ impl <'a> FirrtlParser {
         }
     }
 
+    pub fn parse_mem_stmt(stream: &mut FirrtlStream<'a>)
+        -> Result<(), FirrtlStreamErr>
+    {
+        let stmt_blk_level = stream.indent_level();
+        stream.match_identkw("mem")?;
+        stream.next_token();
+        let mem_id = stream.get_identkw()?;
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+        assert!(stream.is_sol() && stream.indent_level() > stmt_blk_level);
+
+        stream.match_identkw("data-type")?;
+        stream.next_token();
+        stream.match_punc("=>")?;
+        stream.next_token();
+        let data_type = FirrtlParser::parse_type(stream)?;
+        assert!(stream.is_sol() && stream.indent_level() > stmt_blk_level);
+
+        stream.match_identkw("depth")?;
+        stream.next_token();
+        stream.match_punc("=>")?;
+        stream.next_token();
+        let depth = stream.get_lit_int()?;
+        stream.next_token();
+        assert!(stream.is_sol() && stream.indent_level() > stmt_blk_level);
+
+        stream.match_identkw("read-latency")?;
+        stream.next_token();
+        stream.match_punc("=>")?;
+        stream.next_token();
+        let read_lat = stream.get_lit_int()?;
+        stream.next_token();
+        assert!(stream.is_sol() && stream.indent_level() > stmt_blk_level);
+
+        stream.match_identkw("write-latency")?;
+        stream.next_token();
+        stream.match_punc("=>")?;
+        stream.next_token();
+        let write_lat = stream.get_lit_int()?;
+        stream.next_token();
+        assert!(stream.is_sol() && stream.indent_level() > stmt_blk_level);
+
+        // FIXME: In 'parse-basic.fir' from llvm/circt, there are some examples
+        // where the order of declarations here does not match the following
+        // language in the spec:
+        //
+        //      data-type =>
+        //      depth =>
+        //      read-latency =>
+        //      write-latency =>
+        //      read-under-write =>
+        //      { reader ... }
+        //      { writer ... }
+        //      { readwriter ... }
+        //
+        // For the time being, accept them in the following order:
+        //
+        //      ...
+        //      write-latency =>
+        //      { reader ... }
+        //      { writer ... }
+        //      read-under-write =>
+        //
+        //  Additionally, there are also examples where 'reader' and 'writer'
+        //  may have more than one identifier in the same line; in the spec,
+        //  'reader' and 'writer' are defined as having a single id per line.
+        //
+
+        loop {
+            println!("{:?}", stream.remaining_tokens());
+            // For now, assume 'read-under-write' terminates the block
+            if stream.match_identkw("read-under-write").is_ok() {
+                stream.next_token();
+                stream.match_punc("=>")?;
+                stream.next_token();
+                match stream.get_identkw()? {
+                    "old" => {},
+                    "new" => {},
+                    "undefined" => {},
+                    _ => panic!("unexpected read-under-write keyword"),
+                }
+                stream.next_token();
+                assert!(stream.indent_level() <= stmt_blk_level);
+                break;
+            }
+
+            if stream.match_identkw("reader").is_ok() {
+                stream.next_token();
+                stream.match_punc("=>")?;
+                stream.next_token();
+                while !stream.is_sol() {
+                    let rp_id = stream.get_identkw()?;
+                    stream.next_token();
+                }
+            }
+            else if stream.match_identkw("writer").is_ok() {
+                stream.next_token();
+                stream.match_punc("=>")?;
+                stream.next_token();
+                while !stream.is_sol() {
+                    let wp_id = stream.get_identkw()?;
+                    stream.next_token();
+                }
+            }
+            else if stream.match_identkw("readwriter").is_ok() {
+                stream.next_token();
+                stream.match_punc("=>")?;
+                stream.next_token();
+                while !stream.is_sol() {
+                    let rwp_id = stream.get_identkw()?;
+                    stream.next_token();
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn parse_reg_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        unimplemented!("reg");
+        stream.match_identkw("reg")?;
+        stream.next_token();
+        let id = stream.get_identkw()?;
+        stream.add_module_ctx(id);
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+
+        let reg_type = FirrtlParser::parse_type(stream)?;
+        let clk_expr = FirrtlParser::parse_expr(stream)?;
+
+        if stream.match_identkw("with").is_ok() {
+            stream.next_token();
+            stream.match_punc(":")?;
+            stream.next_token();
+
+            // Apparently optional parenthesis?
+            if stream.match_punc("(").is_ok() {
+                stream.next_token();
+            }
+
+            stream.match_identkw("reset")?;
+            stream.next_token();
+            stream.match_punc("=>")?;
+            stream.next_token();
+            stream.match_punc("(")?;
+            stream.next_token();
+            let e1 = FirrtlParser::parse_expr(stream)?;
+            let e2 = FirrtlParser::parse_expr(stream)?;
+            stream.match_punc(")")?;
+            stream.next_token();
+
+            // Apparently optional parenthesis?
+            if stream.match_punc(")").is_ok() {
+                stream.next_token();
+            }
+        }
+        Ok(())
     }
     pub fn parse_inst_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        unimplemented!("inst");
+        stream.match_identkw("inst")?;
+        stream.next_token();
+
+        let inst_id = stream.get_identkw()?;
+        stream.add_module_ctx(inst_id);
+        stream.next_token();
+
+        stream.match_identkw("of")?;
+        stream.next_token();
+
+        // FIXME: legalize module identifiers
+        let module_id = stream.get_identkw()?;
+        stream.next_token();
+
+        Ok(())
     }
     pub fn parse_define_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
@@ -82,7 +269,16 @@ impl <'a> FirrtlParser {
     pub fn parse_attach_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        unimplemented!("attach");
+        stream.match_identkw("attach")?;
+        stream.next_token();
+        stream.match_punc("(")?;
+        stream.next_token();
+        while !stream.match_punc(")").is_ok() {
+            let reference = FirrtlParser::parse_reference(stream)?;
+        }
+        stream.match_punc(")")?;
+        stream.next_token();
+        Ok(())
     }
     pub fn parse_force_release_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
@@ -260,23 +456,6 @@ impl <'a> FirrtlParser {
                 }
             }
             Ok(())
-
-            //if stream.match_identkw("else").is_ok() {
-            //    stream.next_token();
-
-            //    if stream.match_identkw("when").is_ok() { 
-            //        stream.next_token();
-            //        let expr_elsewhen = FirrtlParser::parse_expr(stream)?;
-            //    }
-            //    stream.match_punc(":")?;
-            //    stream.next_token();
-            //    let statements = FirrtlParser::parse_statements_block(stream)?;
-            //    Ok(())
-            //} 
-            //else {
-            //    Ok(())
-            //}
-
         } 
         // If there are still tokens on this line, this must be the case 
         // with a single statement on the same line

@@ -76,13 +76,8 @@ impl <'a> FirrtlParser {
     pub fn parse_expr(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        // NOTE: Careful with lookahead behavior in this function ..
-        // FIXME: Does this properly disambiguate between "an operation" 
-        // and "a reference?"
-
-        println!("parse_expr @ {:?}", stream.remaining_tokens());
-
         // This must be a static_reference (a single identifier)
+        // FIXME: Can we actually assume this?
         if stream.remaining_tokens().len() == 1 {
             let ident = stream.get_identkw()?;
             stream.next_token();
@@ -90,54 +85,95 @@ impl <'a> FirrtlParser {
         }
 
         if FirrtlParser::check_primop_expr(stream) {
-            let primop_kw = stream.get_identkw()?;
-            if PrimOp2Expr::from_str(primop_kw).is_some() {
-                stream.next_token();
-                stream.match_punc("(")?;
-                stream.next_token();
-                let e1 = FirrtlParser::parse_expr(stream)?;
-                let e2 = FirrtlParser::parse_expr(stream)?;
-                stream.match_punc(")")?;
-                stream.next_token();
-            } 
-            else if PrimOp1Expr::from_str(primop_kw).is_some() {
-                stream.next_token();
-                stream.match_punc("(")?;
-                stream.next_token();
-                let e1 = FirrtlParser::parse_expr(stream)?;
-                stream.match_punc(")")?;
-                stream.next_token();
-            } 
-            else if PrimOp1Expr1Int::from_str(primop_kw).is_some() {
-                stream.next_token();
-                stream.match_punc("(")?;
-                stream.next_token();
-                unimplemented!("PrimOp1Expr1Int");
-            } 
-            else if PrimOp1Expr2Int::from_str(primop_kw).is_some() {
-                stream.next_token();
-                stream.match_punc("(")?;
-                stream.next_token();
-                unimplemented!("PrimOp1Expr2Int");
-            } else {
-                panic!("eh?");
-            }
+            let primop_expr = FirrtlParser::parse_primop_expr(stream)?;
         }
         else if FirrtlParser::check_const_expr(stream) {
             let const_expr = FirrtlParser::parse_const_expr(stream)?;
         }
         else if FirrtlParser::check_mux_expr(stream) {
-            panic!("mux");
+            let mux_expr = FirrtlParser::parse_mux_expr(stream)?;
         }
         else if FirrtlParser::check_read_expr(stream) {
-            panic!("read");
+            let read_expr = FirrtlParser::parse_read_expr(stream)?;
         } 
         else if FirrtlParser::check_reference(stream) {
-            let reference = FirrtlParser::parse_reference(stream)?;
+            let ref_expr = FirrtlParser::parse_reference(stream)?;
         } 
         else {
             panic!("unable to disambiguate expression? {:?}", 
                 stream.remaining_tokens());
+        }
+        Ok(())
+    }
+
+    pub fn parse_mux_expr(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr>
+    {
+        stream.match_identkw("mux")?;
+        stream.next_token();
+        stream.match_punc("(")?;
+        stream.next_token();
+
+        let e1 = FirrtlParser::parse_expr(stream)?;
+        let e2 = FirrtlParser::parse_expr(stream)?;
+        let e3 = FirrtlParser::parse_expr(stream)?;
+
+        stream.match_punc(")")?;
+        stream.next_token();
+        Ok(())
+    }
+    pub fn parse_read_expr(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr>
+    {
+        panic!("read");
+        Ok(())
+    }
+
+
+    pub fn parse_primop_expr(stream: &mut FirrtlStream<'a>) 
+        -> Result<(), FirrtlStreamErr>
+    {
+        let primop_kw = stream.get_identkw()?;
+        if PrimOp2Expr::from_str(primop_kw).is_some() {
+            stream.next_token();
+            stream.match_punc("(")?;
+            stream.next_token();
+            let e1 = FirrtlParser::parse_expr(stream)?;
+            let e2 = FirrtlParser::parse_expr(stream)?;
+            stream.match_punc(")")?;
+            stream.next_token();
+        } 
+        else if PrimOp1Expr::from_str(primop_kw).is_some() {
+            stream.next_token();
+            stream.match_punc("(")?;
+            stream.next_token();
+            let e1 = FirrtlParser::parse_expr(stream)?;
+            stream.match_punc(")")?;
+            stream.next_token();
+        } 
+        else if PrimOp1Expr1Int::from_str(primop_kw).is_some() {
+            stream.next_token();
+            stream.match_punc("(")?;
+            stream.next_token();
+            let e1 = FirrtlParser::parse_expr(stream)?;
+            let lit1 = stream.get_lit_int()?;
+            stream.next_token();
+            stream.match_punc(")")?;
+            stream.next_token();
+        } 
+        else if PrimOp1Expr2Int::from_str(primop_kw).is_some() {
+            stream.next_token();
+            stream.match_punc("(")?;
+            stream.next_token();
+            let e1 = FirrtlParser::parse_expr(stream)?;
+            let lit1 = stream.get_lit_int()?;
+            stream.next_token();
+            let lit2 = stream.get_lit_int()?;
+            stream.next_token();
+            stream.match_punc(")")?;
+            stream.next_token();
+        } else {
+            panic!("eh?");
         }
         Ok(())
     }
@@ -193,28 +229,9 @@ impl <'a> FirrtlParser {
     pub fn parse_reference(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        let static_ref = FirrtlParser::parse_static_reference(stream)?;
-        if stream.match_punc("[").is_ok() {
-            stream.next_token();
-            let expr = FirrtlParser::parse_expr(stream)?;
-            stream.match_punc("]")?;
-            stream.next_token();
-            unimplemented!("dynamic ref?");
-        }
-        Ok(())
+        println!("parsing reference @ {:?}", stream.remaining_tokens());
 
-    }
-
-
-    pub fn parse_static_reference(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
-    {
-
-        println!("parsing static reference @ {:?}", 
-                 stream.remaining_tokens()
-        );
-
-        // Static references *must* begin with an identifier
+        // References *must* begin with an identifier
         let ref_ident = stream.get_identkw()?;
         stream.next_token();
 
@@ -223,7 +240,7 @@ impl <'a> FirrtlParser {
             // Must be a subfield access
             if stream.match_punc(".").is_ok() {
                 stream.next_token();
-                // FIXME: SFC behavior allows unsigned integer subfield names
+                // FIXME: SFC behavior allows unsigned integer subfield names?
                 if let Ok(lit) = stream.get_lit_int() {
                     stream.next_token();
                 } 
@@ -231,17 +248,33 @@ impl <'a> FirrtlParser {
                     stream.next_token();
                 } 
             } 
-            // Must be a subindex access
+            // Must be a subindex access with an integer literal
             else if stream.match_punc("[").is_ok() {
-                stream.next_token();
+                // Dynamic indexing always terminates a list of postfix ops,
+                // so we should handle this outside the loop?
+                if !stream.peekn_token(1).is_lit_int() {
+                    break;
+                }
+                stream.next_token(); // consume '['
+
                 let subindex = stream.get_lit_int()?;
                 stream.next_token();
                 stream.match_punc("]")?;
                 stream.next_token();
-            } else {
+            } 
+            else {
                 break;
             }
         }
+
+        // Dynamic index
+        if stream.match_punc("[").is_ok() {
+            stream.next_token();
+            let index_expr = FirrtlParser::parse_expr(stream)?;
+            stream.match_punc("]")?;
+            stream.next_token();
+        }
+
         Ok(())
     }
 }

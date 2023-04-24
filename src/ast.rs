@@ -8,10 +8,11 @@ pub enum LiteralNumeric {
 }
 
 
+// NOTE: 'dshlw' only occurs in SFC output?
 pub enum PrimOp2Expr {
     Add, Sub, Mul, Div, Mod,
     Lt, Leq, Gt, Geq, Eq, Neq,
-    Dshl, Dshr,
+    Dshl, Dshlw, Dshr,
     And, Or, Xor, Cat
 }
 impl PrimOp2Expr {
@@ -29,6 +30,7 @@ impl PrimOp2Expr {
             "eq"   => Some(Self::Eq),
             "neq"  => Some(Self::Neq),
             "dshl" => Some(Self::Dshl),
+            "dshlw"=> Some(Self::Dshlw),
             "dshr" => Some(Self::Dshr),
             "and"  => Some(Self::And),
             "or"   => Some(Self::Or),

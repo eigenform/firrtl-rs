@@ -85,7 +85,7 @@ impl <'a> FirrtlParser {
             let bundle_type = FirrtlParser::parse_bundle(stream)?;
             //unimplemented!("bundle");
         } 
-        // This is some ground type (or an array of ground type)
+        // This is some ground type
         else {
             let ground_type = stream.get_identkw()?;
             let maybe_width = match ground_type {
@@ -100,24 +100,23 @@ impl <'a> FirrtlParser {
             } else {
                 None
             };
-
-            // Optionally indicates an array type
-            let arrwidth = if stream.match_punc("[").is_ok() {
-                stream.next_token();
-                let w = stream.get_lit_int()?;
-                stream.next_token();
-                stream.match_punc("]")?;
-                stream.next_token();
-                Some(w.parse::<usize>().unwrap())
-            } else { 
-                None
-            };
         }
+
+        // NOTE: Array/vector types can also be of bundles.
+        // Optionally indicates an array type.
+        let arrwidth = if stream.match_punc("[").is_ok() {
+            stream.next_token();
+            let w = stream.get_lit_int()?;
+            stream.next_token();
+            stream.match_punc("]")?;
+            stream.next_token();
+            Some(w.parse::<usize>().unwrap())
+        } else { 
+            None
+        };
 
         Ok(())
     }
-
-
 
 }
 
