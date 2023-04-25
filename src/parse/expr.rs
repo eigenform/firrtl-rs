@@ -111,7 +111,7 @@ impl <'a> FirrtlParser {
             panic!("unable to disambiguate expression? {:?}", 
                 stream.remaining_tokens());
         }
-        println!("finished expr, {:?}", stream.remaining_tokens());
+        //println!("finished expr, {:?}", stream.remaining_tokens());
         Ok(())
     }
 
@@ -286,7 +286,7 @@ impl <'a> FirrtlParser {
     pub fn parse_reference(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        println!("parsing reference @ {:?}", stream.remaining_tokens());
+        //println!("parsing reference @ {:?}", stream.remaining_tokens());
 
         // All references are *at least* composed of a static reference
         let static_ref = FirrtlParser::parse_static_reference(stream)?;

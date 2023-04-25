@@ -2,11 +2,19 @@
 use crate::lex::*;
 use crate::ast::*;
 use crate::parse::FirrtlParser;
+use std::collections::HashMap;
 
 impl <'a> FirrtlParser {
     pub fn parse_module(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr> 
     {
+        stream.match_identkw("module")?;
+        stream.next_token();
+        let module_id = stream.get_identkw()?;
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+
         let body_indent_level = stream.indent_level();
 
         assert!(stream.is_sol());
@@ -28,6 +36,13 @@ impl <'a> FirrtlParser {
     pub fn parse_intmodule(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr> 
     {
+        stream.match_identkw("intmodule")?;
+        stream.next_token();
+        let intmodule_id = stream.get_identkw()?;
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+
         let body_indent_level = stream.indent_level();
         assert!(stream.is_sol());
         let port_list = FirrtlParser::parse_portlist(stream)?;
@@ -53,6 +68,13 @@ impl <'a> FirrtlParser {
     pub fn parse_extmodule(stream: &mut FirrtlStream<'a>) 
         -> Result<(), FirrtlStreamErr> 
     {
+        stream.match_identkw("extmodule")?;
+        stream.next_token();
+        let extmodule_id = stream.get_identkw()?;
+        stream.next_token();
+        stream.match_punc(":")?;
+        stream.next_token();
+
         let body_indent_level = stream.indent_level();
         assert!(stream.is_sol());
         let port_list = FirrtlParser::parse_portlist(stream)?;
@@ -129,14 +151,14 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_portlist(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Portlist, FirrtlStreamErr>
     {
+        let mut res: Portlist = Vec::new();
+
         let body_indent_level = stream.indent_level();
 
         loop {
             assert!(stream.is_sol());
-            println!("{:?}", stream.line().content());
-
             if stream.indent_level() < body_indent_level {
                 break;
             }
@@ -159,7 +181,7 @@ impl <'a> FirrtlParser {
             } else if stream.match_identkw("output").is_ok() {
                 Direction::Output
             } else { 
-                return Err(FirrtlStreamErr::Other("how did we get here?"));
+                return Err(FirrtlStreamErr::Other("invalid port direction"));
             };
             stream.next_token();
 
@@ -170,10 +192,12 @@ impl <'a> FirrtlParser {
             stream.match_punc(":")?;
             stream.next_token();
             let port_type = FirrtlParser::parse_type(stream)?;
+
+            res.push(PortDeclaration::new(port_id, port_dir, port_type));
+
         }
 
-
-        Ok(())
+        Ok(res)
     }
 
 

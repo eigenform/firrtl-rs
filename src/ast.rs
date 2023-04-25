@@ -1,4 +1,73 @@
 
+pub struct Circuit { 
+    id: String,
+    modules:    Vec<Module>,
+    intmodules: Vec<Module>,
+    extmodules: Vec<Module>,
+}
+impl Circuit {
+    pub fn new(id: impl ToString) -> Self { 
+        Self {
+            id: id.to_string(),
+            modules: Vec::new(),
+            intmodules: Vec::new(),
+            extmodules: Vec::new(),
+        }
+    }
+}
+
+pub struct Module {
+}
+pub struct IntModule {
+}
+pub struct ExtModule {
+}
+
+pub type Portlist = Vec<PortDeclaration>;
+pub struct PortDeclaration {
+    id: String,
+    dir: Direction,
+    ty: FirrtlType,
+}
+impl PortDeclaration {
+    pub fn new(id: impl ToString, dir: Direction, ty: FirrtlType) -> Self { 
+        Self { id: id.to_string(), dir, ty }
+    }
+}
+
+#[derive(Debug)]
+pub enum FirrtlTypeGround {
+    Clock, Reset, AsyncReset, 
+    UInt(Option<usize>), SInt(Option<usize>), Analog(Option<usize>),
+}
+
+#[derive(Debug)]
+pub enum FirrtlTypeRef {
+    Probe(Box<FirrtlType>),
+    RWProbe(Box<FirrtlType>),
+}
+
+#[derive(Debug)]
+pub enum FirrtlType {
+    Ground(FirrtlTypeGround),
+    Vector(Box<Self>, usize),
+    Bundle(Vec<BundleField>),
+    Ref(FirrtlTypeRef),
+    None,
+}
+
+#[derive(Debug)]
+pub struct BundleField {
+    flip: bool,
+    id: String,
+    ty: FirrtlType,
+}
+impl BundleField {
+    pub fn new(flip: bool, id: impl ToString, ty: FirrtlType) -> Self {
+        Self { flip, id: id.to_string(), ty }
+    }
+}
+
 
 pub enum Direction { Input, Output }
 

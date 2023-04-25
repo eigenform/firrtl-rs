@@ -9,7 +9,7 @@ impl <'a> FirrtlParser {
         let body_indent_level = stream.indent_level();
         assert!(stream.is_sol());
         loop {
-            println!("handling statement in block: {:?}", stream.line().content());
+            //println!("handling statement in block: {:?}", stream.line().content());
             if stream.indent_level() < body_indent_level {
                 break;
             }
@@ -33,7 +33,7 @@ impl <'a> FirrtlParser {
     pub fn parse_statement(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        println!("parsing statement @ {:?}", stream.remaining_tokens());
+        //println!("parsing statement @ {:?}", stream.remaining_tokens());
         // We have to check for statements that begin with a 'reference'
         // first. Otherwise, this is a "simple" statement where we can 
         // just match on some keyword
@@ -436,7 +436,7 @@ impl <'a> FirrtlParser {
     pub fn parse_reference_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(), FirrtlStreamErr>
     {
-        println!("parsing reference stmt @ {:?}", stream.remaining_tokens());
+        //println!("parsing reference stmt @ {:?}", stream.remaining_tokens());
         let reference = FirrtlParser::parse_reference(stream)?;
         // Must be an assignment '<=', this is an identifier
         if stream.match_punc("<=").is_ok() {
@@ -542,85 +542,7 @@ impl <'a> FirrtlParser {
                 break;
             }
         }
-
         Ok(())
     }
 }
-
-
-
-//        // This must be 'when <expr> : <statement> else :'
-//        if !stream.is_sol() {
-//        }
-//
-//
-//        // Have we reached the start of a new line?
-//        if stream.is_sol() {
-//            // This must be a block of statements
-//            assert!(stream.indent_level() > current_indent);
-//            let statements = FirrtlParser::parse_statements_block(stream)?;
-//            println!("Finished when block");
-//
-//            assert!(stream.is_sol());
-//            println!("{:?}", stream.remaining_tokens());
-//            loop {
-//
-//                println!("{:?}", stream.remaining_tokens());
-//
-//                if stream.indent_level() < current_indent {
-//                    panic!("uhhh");
-//                }
-//
-//
-//                if stream.match_identkw("else").is_ok() {
-//                    stream.next_token();
-//
-//                    // This terminates the list of conditional blocks
-//                    if stream.match_punc(":").is_ok() {
-//                        stream.next_token();
-//                        let blk = FirrtlParser::parse_statements_block(stream)?;
-//                        break;
-//                    }
-//
-//                    // Add to the list of conditional blocks
-//                    if stream.match_identkw("when").is_ok() {
-//                        stream.next_token();
-//                        let expr_elsewhen = FirrtlParser::parse_expr(stream)?;
-//                        stream.match_punc(":")?;
-//                        stream.next_token();
-//                        let blk = FirrtlParser::parse_statements_block(stream)?;
-//                        continue;
-//                    }
-//                } else { 
-//                    break;
-//                }
-//            }
-//            Ok(())
-//        } 
-//        // If there are still tokens on this line, this must be the case 
-//        // with a single statement on the same line
-//        else {
-//            println!("{:?}", stream.remaining_tokens());
-//            let stmt = FirrtlParser::parse_statement(stream)?;
-//            println!("{:?}", stream.remaining_tokens());
-//
-//            if stream.is_sol() {
-//                unimplemented!();
-//                Ok(())
-//            } else { 
-//                // This must be 'else' with a single statement
-//                if stream.match_identkw("else").is_ok() {
-//                    stream.next_token();
-//                    stream.match_punc(":")?;
-//                    stream.next_token();
-//                    let else_stmt = FirrtlParser::parse_statement(stream)?;
-//                    Ok(())
-//                } 
-//                else {
-//                    Ok(())
-//                }
-//            }
-//        }
-//    }
-//}
 

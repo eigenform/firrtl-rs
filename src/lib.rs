@@ -4,17 +4,18 @@ mod file;
 mod token;
 mod lex;
 mod parse;
-mod ast;
+pub mod ast;
 
 #[cfg(test)]
 mod tests {
     use crate::file::*;
     use crate::lex::*;
     use crate::parse::*;
+    use crate::ast::*;
 
 
     #[test]
-    fn read_firrtl_file() -> Result<(), FirrtlStreamErr> {
+    fn circt_parse_basic() -> Result<(), FirrtlStreamErr> {
         use std::fs::File;
         use std::io::*;
 
@@ -25,8 +26,11 @@ mod tests {
         let sf    = FirrtlFile::new(filename, &s);
         let tok   = FirrtlLexer::lex(&sf);
         let mut stream = FirrtlStream::new(&tok);
-        FirrtlParser::parse(&mut stream)
+        let circuit = FirrtlParser::parse(&mut stream)?;
+        Ok(())
     }
+
+
 }
 
 

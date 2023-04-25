@@ -21,9 +21,9 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_bundle_field(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<BundleField, FirrtlStreamErr>
     {
-        println!("{:?}", stream.remaining_tokens());
+        //println!("{:?}", stream.remaining_tokens());
         let flip = if stream.match_identkw("flip").is_ok() {
             stream.next_token();
             true
@@ -42,43 +42,38 @@ impl <'a> FirrtlParser {
 
         stream.match_punc(":")?;
         stream.next_token();
-
-        println!("{:?}", stream.remaining_tokens());
         let field_type = FirrtlParser::parse_type(stream)?;
-        println!("{:?}", stream.remaining_tokens());
-        Ok(())
+
+        Ok(BundleField::new(flip, field_id, field_type))
     }
 
     pub fn parse_bundle(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<FirrtlType, FirrtlStreamErr>
     {
         stream.match_punc("{")?;
         stream.next_token();
 
+        let mut fields = Vec::new();
+
         // NOTE: Always at least one field?
         let field = FirrtlParser::parse_bundle_field(stream)?;
+        fields.push(field);
         loop { 
-            println!("{:?}", stream.remaining_tokens());
-            // End of fields
             if stream.match_punc("}").is_ok() {
                 stream.next_token();
                 break;
             }
-
-            println!("{:?}", stream.remaining_tokens());
-            let f = FirrtlParser::parse_bundle_field(stream)?;
-            println!("{:?}", stream.remaining_tokens());
-
+            let field = FirrtlParser::parse_bundle_field(stream)?;
+            fields.push(field);
         }
-
-        Ok(())
+        Ok(FirrtlType::Bundle(fields))
     }
 
 
 
 
     pub fn parse_type(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<FirrtlType, FirrtlStreamErr>
     {
 
         // Probe/RWProbe
@@ -89,7 +84,7 @@ impl <'a> FirrtlParser {
             let prb_type = FirrtlParser::parse_type(stream)?;
             stream.match_punc(">")?;
             stream.next_token();
-            return Ok(());
+            Ok(FirrtlType::Ref(FirrtlTypeRef::Probe(Box::new(prb_type))))
 
         } else if stream.match_identkw("RWProbe").is_ok() {
             stream.next_token();
@@ -98,7 +93,7 @@ impl <'a> FirrtlParser {
             let prb_type = FirrtlParser::parse_type(stream)?;
             stream.match_punc(">")?;
             stream.next_token();
-            return Ok(());
+            Ok(FirrtlType::Ref(FirrtlTypeRef::RWProbe(Box::new(prb_type))))
         } 
         // Otherwise, this is a ground/aggregate type
         else {
@@ -109,40 +104,42 @@ impl <'a> FirrtlParser {
                 false
             };
 
-            // This is a bundle type
-            if stream.match_punc("{").is_ok() {
-                let bundle_type = FirrtlParser::parse_bundle(stream)?;
-                //unimplemented!("bundle");
-            } 
-            // This is some ground type
-            else {
+            // Either a bundle, or a ground type
+            let res_type = if stream.match_punc("{").is_ok() {
+                FirrtlParser::parse_bundle(stream)?
+            } else {
                 let ground_type = stream.get_identkw()?;
-                let maybe_width = match ground_type {
-                    "UInt" | "SInt" | "Analog" => true,
-                    "Clock" | "Reset" | "AsyncReset" => false,
-                    _ => return Err(FirrtlStreamErr::Other("bad ground type?")),
-                };
                 stream.next_token();
-                let width = if maybe_width {
-                    FirrtlParser::parse_optional_typewidth(stream)?
-                } else {
-                    None
-                };
-            }
+                let width = FirrtlParser::parse_optional_typewidth(stream)?;
+                match ground_type { 
+                    "UInt" => 
+                        FirrtlType::Ground(FirrtlTypeGround::UInt(width)),
+                    "SInt" => 
+                        FirrtlType::Ground(FirrtlTypeGround::SInt(width)),
+                    "Analog" => 
+                        FirrtlType::Ground(FirrtlTypeGround::Analog(width)),
+                    "Clock" => 
+                        FirrtlType::Ground(FirrtlTypeGround::Clock),
+                    "Reset" => 
+                        FirrtlType::Ground(FirrtlTypeGround::Reset),
+                    "AsyncReset" => 
+                        FirrtlType::Ground(FirrtlTypeGround::AsyncReset),
+                    _ => panic!("unknown ground type?"),
+                }
+            };
 
-            // Optionally indicates an array type.
-            let arrwidth = if stream.match_punc("[").is_ok() {
+            // This is an array of 'res_type'
+            if stream.match_punc("[").is_ok() {
                 stream.next_token();
-                let w = stream.get_lit_int()?;
+                let width = stream.get_lit_int()?;
                 stream.next_token();
                 stream.match_punc("]")?;
                 stream.next_token();
-                Some(w.parse::<usize>().unwrap())
-            } else { 
-                None
-            };
+                Ok(FirrtlType::Vector(Box::new(res_type), width.parse().unwrap()))
+            } else {
+                Ok(res_type)
+            }
         }
-        Ok(())
     }
 }
 

@@ -23,7 +23,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_circuit(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Circuit, FirrtlStreamErr>
     {
         assert!(stream.indent_level() == 0);
         stream.match_identkw("circuit")?;
@@ -34,57 +34,49 @@ impl <'a> FirrtlParser {
         stream.next_token();
         assert!(stream.is_sol());
 
+        let mut res = Circuit::new(circuit_id);
+
         // This should be the indentation level for all module declarations
         let module_indent = stream.indent_level();
         assert!(module_indent > 0);
 
         loop {
+            // There are no more module declarations left
+            if stream.indent_level() == 0 {
+                break;
+            }
+
             assert!(stream.is_sol());
             let m_indent = stream.indent_level();
             assert!(m_indent == module_indent);
+            stream.clear_module_ctx();
 
-            if stream.match_identkw("module").is_ok() {
-                stream.clear_module_ctx();
-                stream.next_token();
-                let module_id = stream.get_identkw()?;
-                stream.next_token();
-                stream.match_punc(":")?;
-                stream.next_token();
-                assert!(stream.indent_level() > m_indent);
-                let module = FirrtlParser::parse_module(stream)?;
-            } 
-            else if stream.match_identkw("extmodule").is_ok() {
-                stream.clear_module_ctx();
-                stream.next_token();
-                let extmodule_id = stream.get_identkw()?;
-                stream.next_token();
-                stream.match_punc(":")?;
-                stream.next_token();
-                assert!(stream.indent_level() > m_indent);
-                let extmodule = FirrtlParser::parse_extmodule(stream)?;
-            } 
-            else if stream.match_identkw("intmodule").is_ok() {
-                stream.clear_module_ctx();
-                stream.next_token();
-                let intmodule_id = stream.get_identkw()?;
-                stream.next_token();
-                stream.match_punc(":")?;
-                stream.next_token();
-                assert!(stream.indent_level() > m_indent);
-                let intmodule = FirrtlParser::parse_intmodule(stream)?;
-            } else {
-                return Err(FirrtlStreamErr::Other("bad module keyword?"));
+            match stream.get_identkw()? {
+                "module" => {
+                    let m = FirrtlParser::parse_module(stream)?;
+                },
+                "extmodule" => {
+                    let m = FirrtlParser::parse_extmodule(stream)?;
+                },
+                "intmodule" => {
+                    let m = FirrtlParser::parse_intmodule(stream)?;
+                },
+                _ => {
+                    return Err(FirrtlStreamErr::Other("bad module keyword?"));
+                }
             }
         }
+
+        Ok(res)
     }
 
     /// Convert a [FirrtlStream] into an AST
     pub fn parse(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr> 
+        -> Result<Circuit, FirrtlStreamErr> 
     {
         FirrtlParser::parse_firrtl_version(stream)?;
-        FirrtlParser::parse_circuit(stream)?;
-        Ok(())
+        let circuit = FirrtlParser::parse_circuit(stream)?;
+        Ok(circuit)
     }
 }
 

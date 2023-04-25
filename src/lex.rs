@@ -159,7 +159,6 @@ impl <'a> FirrtlStream<'a> {
 
     pub fn next_token(&mut self) {
         if self.lcur == self.line().len() - 1 {
-            println!("[*] Moved to next line");
             self.gcur += 1;
             self.lcur  = 0;
         } else { 
