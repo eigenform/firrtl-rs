@@ -1,20 +1,21 @@
 
+use crate::ast::*;
 use crate::lex::*;
 use crate::parse::FirrtlParser;
 
 impl <'a> FirrtlParser {
     pub fn parse_statements_block(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Vec<Statement>, FirrtlStreamErr>
     {
+        let mut statements = Vec::new();
         let body_indent_level = stream.indent_level();
         assert!(stream.is_sol());
         loop {
-            //println!("handling statement in block: {:?}", stream.line().content());
             if stream.indent_level() < body_indent_level {
                 break;
             }
             let statement = FirrtlParser::parse_statement(stream)?;
-            //println!("finished statement, {:?}", stream.remaining_tokens());
+            statements.push(statement);
 
             // FIXME: Dynamic field access after a statement?
             if !stream.is_sol() {
@@ -24,79 +25,138 @@ impl <'a> FirrtlParser {
                     stream.next_token();
                 }
             }
-
             assert!(stream.is_sol());
         }
-        Ok(())
+        Ok(statements)
     }
 
     pub fn parse_statement(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Statement, FirrtlStreamErr>
     {
-        //println!("parsing statement @ {:?}", stream.remaining_tokens());
         // We have to check for statements that begin with a 'reference'
         // first. Otherwise, this is a "simple" statement where we can 
-        // just match on some keyword
+        // just match on some keyword.
         if FirrtlParser::check_reference(stream) {
             let ref_stmt = FirrtlParser::parse_reference_stmt(stream)?;
-        } else {
-            match stream.get_identkw()? {
-                "wire"
-                    => FirrtlParser::parse_wire_stmt(stream)?,
-                "reg"
-                    => FirrtlParser::parse_reg_stmt(stream)?,
-                "mem"
-                    => FirrtlParser::parse_mem_stmt(stream)?,
-                "inst"
-                    => FirrtlParser::parse_inst_stmt(stream)?,
-                "node"
-                    => FirrtlParser::parse_node_stmt(stream)?,
-                "attach"
-                    => FirrtlParser::parse_attach_stmt(stream)?,
-                "when"
-                    => FirrtlParser::parse_when_stmt(stream)?,
-                "stop"
-                    => FirrtlParser::parse_stop_stmt(stream)?,
-                "printf" 
-                    => FirrtlParser::parse_printf_stmt(stream)?,
-                "skip"
-                    => stream.next_token(),
-                "define"
-                    => FirrtlParser::parse_define_stmt(stream)?,
-                "force_initial"
-                    => FirrtlParser::parse_force_initial_stmt(stream)?,
-                "release_initial"
-                    => FirrtlParser::parse_release_initial_stmt(stream)?,
-                "force"
-                    => FirrtlParser::parse_force_stmt(stream)?,
-                "release"
-                    => FirrtlParser::parse_release_stmt(stream)?,
-                "connect"
-                    => FirrtlParser::parse_connect_stmt(stream)?,
-                "invalidate"
-                    => FirrtlParser::parse_invalidate_stmt(stream)?,
-
-                // FIXME: These are old SFC statements that I don't want
-                // to deal with right now
-                "cmem" | "smem" => { 
-                    stream.next_line(); 
-                },
-                "infer" | "read" | "write" | "rdwr" => {
-                    stream.next_line();
-                },
-
-                // FIXME: These are verification statements that aren't
-                // properly in the spec yet
-                "assert" | "assume" | "cover" => {
-                    stream.next_line();
-                },
-
-                identkw @ _ => {
-                    panic!("unexpected statement keyword {}", identkw);
-                },
+            return Ok(ref_stmt);
+        } 
+        match stream.get_identkw()? {
+            "wire" => {
+                let wire_decl = FirrtlParser::parse_wire_stmt(stream)?;
+                return Ok(Statement::Wire(wire_decl));
+            },
+            "reg" => {
+                let reg_decl = FirrtlParser::parse_reg_stmt(stream)?;
+                return Ok(Statement::Reg(reg_decl));
+            },
+            "mem" => {
+                let mem_decl = FirrtlParser::parse_mem_stmt(stream)?;
+                return Ok(Statement::Unimplemented("mem".to_string()));
             }
+            "inst" => { 
+                let inst_decl = FirrtlParser::parse_inst_stmt(stream)?;
+                return Ok(Statement::Inst(inst_decl));
+            },
+            "node" => { 
+                let x = FirrtlParser::parse_node_stmt(stream)?;
+                return Ok(Statement::Unimplemented("node".to_string()));
+            },
+            "attach" => { 
+                let x = FirrtlParser::parse_attach_stmt(stream)?;
+                return Ok(Statement::Unimplemented("attach".to_string()));
+            },
+            "when" => { 
+                let x = FirrtlParser::parse_when_stmt(stream)?;
+                return Ok(Statement::Unimplemented("when".to_string()));
+            },
+            "stop" => { 
+                let x = FirrtlParser::parse_stop_stmt(stream)?;
+                return Ok(Statement::Unimplemented("stop".to_string()));
+            },
+            "printf" => { 
+                let x = FirrtlParser::parse_printf_stmt(stream)?;
+                return Ok(Statement::Unimplemented("printf".to_string()));
+            },
+            "skip" => { 
+                stream.next_token();
+                return Ok(Statement::Unimplemented("skip".to_string()));
+            },
+            "define" => { 
+                let x = FirrtlParser::parse_define_stmt(stream)?;
+                return Ok(Statement::Unimplemented("define".to_string()));
+            },
+            "force_initial" => { 
+                let x = FirrtlParser::parse_force_initial_stmt(stream)?;
+                return Ok(Statement::Unimplemented("force_initial".to_string()));
+            },
+            "release_initial" => { 
+                let x = FirrtlParser::parse_release_initial_stmt(stream)?;
+                return Ok(Statement::Unimplemented("release_initial".to_string()));
+            },
+            "force" => { 
+                let x = FirrtlParser::parse_force_stmt(stream)?;
+                return Ok(Statement::Unimplemented("force".to_string()));
+            },
+            "release" => { 
+                let x = FirrtlParser::parse_release_stmt(stream)?;
+                return Ok(Statement::Unimplemented("release".to_string()));
+            },
+            "connect" => { 
+                let x = FirrtlParser::parse_connect_stmt(stream)?;
+                return Ok(Statement::Unimplemented("connect".to_string()));
+            },
+            "invalidate" => { 
+                let x = FirrtlParser::parse_invalidate_stmt(stream)?;
+                return Ok(Statement::Unimplemented("invalidate".to_string()));
+            },
+
+            // FIXME: These are old SFC statements that I don't want
+            // to deal with right now (this is CHIRRTL?)
+            "cmem" => {
+                stream.next_line(); 
+                return Ok(Statement::Unimplemented("cmem".to_string()));
+            },
+            "smem" => { 
+                stream.next_line(); 
+                return Ok(Statement::Unimplemented("smem".to_string()));
+            },
+            "infer" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("infer".to_string()));
+            },
+            "read" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("read".to_string()));
+            },
+            "write" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("write".to_string()));
+            },
+            "rdwr" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("rdwr".to_string()));
+            },
+
+            // FIXME: These are verification statements that aren't
+            // properly in the spec yet
+            "assert" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("assert".to_string()));
+            },
+            "assume" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("assume".to_string()));
+            }, 
+            "cover" => {
+                stream.next_line();
+                return Ok(Statement::Unimplemented("cover".to_string()));
+            },
+
+            // Otherwise, this is an invalid statement
+            identkw @ _ => {
+                panic!("unexpected statement keyword {}", identkw);
+            },
         }
-        Ok(())
     }
 
     pub fn parse_mem_stmt(stream: &mut FirrtlStream<'a>)
@@ -215,7 +275,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_reg_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<RegDecl, FirrtlStreamErr>
     {
         stream.match_identkw("reg")?;
         stream.next_token();
@@ -225,7 +285,7 @@ impl <'a> FirrtlParser {
         stream.match_punc(":")?;
         stream.next_token();
 
-        let reg_type = FirrtlParser::parse_type(stream)?;
+        let ty = FirrtlParser::parse_type(stream)?;
         let clk_expr = FirrtlParser::parse_expr(stream)?;
 
         if stream.match_identkw("with").is_ok() {
@@ -254,26 +314,24 @@ impl <'a> FirrtlParser {
                 stream.next_token();
             }
         }
-        Ok(())
+        Ok(RegDecl::new(id, ty))
     }
+
     pub fn parse_inst_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<InstDecl, FirrtlStreamErr>
     {
+        // FIXME: legalize module identifiers
         stream.match_identkw("inst")?;
         stream.next_token();
-
-        let inst_id = stream.get_identkw()?;
-        stream.add_module_ctx(inst_id);
+        let id = stream.get_identkw()?;
+        stream.add_module_ctx(id);
         stream.next_token();
-
         stream.match_identkw("of")?;
         stream.next_token();
-
-        // FIXME: legalize module identifiers
         let module_id = stream.get_identkw()?;
         stream.next_token();
 
-        Ok(())
+        Ok(InstDecl::new(id, module_id))
     }
 
     pub fn parse_define_stmt(stream: &mut FirrtlStream<'a>)
@@ -434,7 +492,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_reference_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Statement, FirrtlStreamErr>
     {
         //println!("parsing reference stmt @ {:?}", stream.remaining_tokens());
         let reference = FirrtlParser::parse_reference(stream)?;
@@ -442,35 +500,37 @@ impl <'a> FirrtlParser {
         if stream.match_punc("<=").is_ok() {
             stream.next_token();
             let expr = FirrtlParser::parse_expr(stream)?;
+            Ok(Statement::Connect(reference, expr))
         } 
         // Must be a partial assignment '<-'?,
         else if stream.match_punc("<-").is_ok() {
             stream.next_token();
             let expr = FirrtlParser::parse_expr(stream)?;
+            Ok(Statement::PartialConnect(reference, expr))
         }
         // Must be 'is invalid', this is an identifier
         else if stream.match_identkw("is").is_ok() {
             stream.next_token();
             stream.match_identkw("invalid")?;
             stream.next_token();
+            Ok(Statement::Invalidate(reference))
         } else { 
             panic!("unexpected keyword in reference statement?");
         }
-        Ok(())
     }
 
     pub fn parse_wire_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<WireDecl, FirrtlStreamErr>
     {
         stream.match_identkw("wire")?;
         stream.next_token();
-        let wire_id = stream.get_identkw()?;
-        stream.add_module_ctx(wire_id);
+        let id = stream.get_identkw()?;
+        stream.add_module_ctx(id);
         stream.next_token();
         stream.match_punc(":")?;
         stream.next_token();
         let ty = FirrtlParser::parse_type(stream)?;
-        Ok(())
+        Ok(WireDecl::new(id, ty))
     }
 
     pub fn parse_node_stmt(stream: &mut FirrtlStream<'a>)

@@ -1,9 +1,10 @@
 
+#[derive(Debug)]
 pub struct Circuit { 
     id: String,
     modules:    Vec<Module>,
-    intmodules: Vec<Module>,
-    extmodules: Vec<Module>,
+    intmodules: Vec<IntModule>,
+    extmodules: Vec<ExtModule>,
 }
 impl Circuit {
     pub fn new(id: impl ToString) -> Self { 
@@ -14,16 +15,66 @@ impl Circuit {
             extmodules: Vec::new(),
         }
     }
+    pub fn add_module(&mut self, m: Module) {
+        self.modules.push(m);
+    }
+    pub fn add_intmodule(&mut self, m: IntModule) {
+        self.intmodules.push(m);
+    }
+    pub fn add_extmodule(&mut self, m: ExtModule) {
+        self.extmodules.push(m);
+    }
 }
 
+
+#[derive(Debug)]
 pub struct Module {
+    id: String,
+    ports: Vec<PortDeclaration>,
+    statements: Vec<Statement>,
 }
-pub struct IntModule {
-}
-pub struct ExtModule {
+impl Module {
+    pub fn new(
+        id: impl ToString, 
+        ports: Vec<PortDeclaration>, 
+        statements: Vec<Statement>
+    ) -> Self 
+    {
+        Self { id: id.to_string(), ports, statements }
+    }
 }
 
-pub type Portlist = Vec<PortDeclaration>;
+#[derive(Debug)]
+pub struct IntModule {
+    id: String,
+    ports: Vec<PortDeclaration>,
+}
+impl IntModule {
+    pub fn new(id: impl ToString, ports: Vec<PortDeclaration>) -> Self {
+        Self {
+            id: id.to_string(),
+            ports
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct ExtModule {
+    id: String,
+    ports: Vec<PortDeclaration>,
+}
+impl ExtModule {
+    pub fn new(id: impl ToString, ports: Vec<PortDeclaration>) -> Self {
+        Self {
+            id: id.to_string(),
+            ports,
+        }
+    }
+}
+
+
+#[derive(Debug)]
 pub struct PortDeclaration {
     id: String,
     dir: Direction,
@@ -34,6 +85,9 @@ impl PortDeclaration {
         Self { id: id.to_string(), dir, ty }
     }
 }
+
+#[derive(Debug)]
+pub enum Direction { Input, Output }
 
 #[derive(Debug)]
 pub enum FirrtlTypeGround {
@@ -68,9 +122,90 @@ impl BundleField {
     }
 }
 
+#[derive(Debug)]
+pub enum Reference {
+    Static(StaticReference),
+    DynamicIndex(StaticReference),
+}
 
-pub enum Direction { Input, Output }
+#[derive(Debug)]
+pub enum StaticReference { 
+    Static(String),
+    Subfield(Box<Self>, String),
+    Subindex(Box<Self>, usize),
+}
 
+#[derive(Debug)]
+pub enum Expr {
+}
+
+#[derive(Debug)]
+pub struct WireDecl {
+    id: String,
+    ty: FirrtlType,
+}
+impl WireDecl {
+    pub fn new(id: impl ToString, ty: FirrtlType) -> Self {
+        Self { id: id.to_string(), ty }
+    }
+}
+
+#[derive(Debug)]
+pub struct RegDecl {
+    id: String,
+    ty: FirrtlType,
+}
+impl RegDecl {
+    pub fn new(id: impl ToString, ty: FirrtlType) -> Self {
+        Self { id: id.to_string(), ty }
+    }
+}
+
+#[derive(Debug)]
+pub struct InstDecl {
+    id: String,
+    module_id: String,
+}
+impl InstDecl {
+    pub fn new(id: impl ToString, module_id: impl ToString) -> Self {
+        Self { id: id.to_string(), module_id: module_id.to_string() }
+    }
+}
+
+
+#[derive(Debug)]
+pub enum Statement {
+    Unimplemented(String),
+    Wire(WireDecl),
+    Reg(RegDecl),
+    Inst(InstDecl),
+    Connect(Reference, Expression),
+    PartialConnect(Reference, Expression),
+    Invalidate(Reference),
+    Skip,
+}
+impl Statement { 
+    pub fn wire_decl(id: impl ToString, ty: FirrtlType) -> Self {
+        Self::Wire(WireDecl { id: id.to_string(), ty })
+    }
+    pub fn reg_decl(id: impl ToString, ty: FirrtlType) -> Self {
+        Self::Reg(RegDecl { id: id.to_string(), ty })
+    }
+    pub fn inst_decl(id: impl ToString, module_id: impl ToString) -> Self {
+        Self::Inst(InstDecl { 
+            id: id.to_string(), 
+            module_id: module_id.to_string()
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum Expression {
+    None,
+}
+
+
+#[derive(Debug)]
 pub enum LiteralNumeric {
     UInt(usize),
     SInt(isize),

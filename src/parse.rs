@@ -34,7 +34,7 @@ impl <'a> FirrtlParser {
         stream.next_token();
         assert!(stream.is_sol());
 
-        let mut res = Circuit::new(circuit_id);
+        let mut circuit = Circuit::new(circuit_id);
 
         // This should be the indentation level for all module declarations
         let module_indent = stream.indent_level();
@@ -54,12 +54,15 @@ impl <'a> FirrtlParser {
             match stream.get_identkw()? {
                 "module" => {
                     let m = FirrtlParser::parse_module(stream)?;
+                    circuit.add_module(m);
                 },
                 "extmodule" => {
                     let m = FirrtlParser::parse_extmodule(stream)?;
+                    circuit.add_extmodule(m);
                 },
                 "intmodule" => {
                     let m = FirrtlParser::parse_intmodule(stream)?;
+                    circuit.add_intmodule(m);
                 },
                 _ => {
                     return Err(FirrtlStreamErr::Other("bad module keyword?"));
@@ -67,7 +70,7 @@ impl <'a> FirrtlParser {
             }
         }
 
-        Ok(res)
+        Ok(circuit)
     }
 
     /// Convert a [FirrtlStream] into an AST

@@ -192,9 +192,15 @@ impl <'a> FirrtlStream<'a> {
         &self.lines[self.gcur].tokens[self.lcur..]
     }
 
-    /// Get the current indentation level
+    /// Get the current indentation level.
+    ///
+    /// NOTe: Returns `0` if the stream has reached EOF.
     pub fn indent_level(&self) -> usize {
-        self.lines[self.gcur].indent_level()
+        if self.gcur >= self.length {
+            0
+        } else {
+            self.lines[self.gcur].indent_level()
+        }
     }
 
     pub fn peek_line(&self) -> &'a FirrtlTokenizedLine {

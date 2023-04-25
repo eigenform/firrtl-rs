@@ -82,14 +82,14 @@ impl <'a> FirrtlParser {
     //  out2 <= read(probe(agg2)).b
     //
     pub fn parse_expr(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Expression, FirrtlStreamErr>
     {
         // This must be a static_reference (a single identifier)
         // FIXME: Can we actually assume this?
         if stream.remaining_tokens().len() == 1 {
             let ident = stream.get_identkw()?;
             stream.next_token();
-            return Ok(());
+            return Ok(Expression::None);
         }
 
         if FirrtlParser::check_primop_expr(stream) {
@@ -111,8 +111,7 @@ impl <'a> FirrtlParser {
             panic!("unable to disambiguate expression? {:?}", 
                 stream.remaining_tokens());
         }
-        //println!("finished expr, {:?}", stream.remaining_tokens());
-        Ok(())
+        return Ok(Expression::None);
     }
 
     pub fn parse_mux_expr(stream: &mut FirrtlStream<'a>) 
@@ -242,11 +241,14 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_static_reference(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<StaticReference, FirrtlStreamErr>
     {
         // References *must* begin with an identifier
         let ref_ident = stream.get_identkw()?;
         stream.next_token();
+        let base_ref = StaticReference::Static(ref_ident.to_string());
+
+        let mut reference = base_ref;
 
         // ... followed by some arbitrary list of subfield/subindex
         loop {
@@ -254,12 +256,18 @@ impl <'a> FirrtlParser {
             if stream.match_punc(".").is_ok() {
                 stream.next_token();
                 // FIXME: SFC behavior allows unsigned integer subfield names?
-                if let Ok(lit) = stream.get_lit_int() {
-                    stream.next_token();
-                } 
-                else if let Ok(ident) = stream.get_identkw() {
-                    stream.next_token();
-                } 
+                let field = if let Ok(lit) = stream.get_lit_int() {
+                    lit
+                } else if let Ok(ident) = stream.get_identkw() {
+                    ident
+                } else {
+                    panic!("invalid token {:?} for subfield name", 
+                           stream.token());
+                };
+                stream.next_token();
+                reference = StaticReference::Subfield(
+                    Box::new(reference), field.to_string()
+                );
             } 
             // Must be a subindex access with an integer literal
             else if stream.match_punc("[").is_ok() {
@@ -271,20 +279,24 @@ impl <'a> FirrtlParser {
                 stream.next_token(); // consume '['
 
                 let subindex = stream.get_lit_int()?;
+                let index    = subindex.parse::<usize>().unwrap();
                 stream.next_token();
                 stream.match_punc("]")?;
                 stream.next_token();
+                reference = StaticReference::Subindex(
+                    Box::new(reference), index
+                );
             } 
             else {
                 break;
             }
         }
-        Ok(())
+        Ok(reference)
     }
 
 
     pub fn parse_reference(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Reference, FirrtlStreamErr>
     {
         //println!("parsing reference @ {:?}", stream.remaining_tokens());
 
@@ -297,9 +309,10 @@ impl <'a> FirrtlParser {
             let index_expr = FirrtlParser::parse_expr(stream)?;
             stream.match_punc("]")?;
             stream.next_token();
+            Ok(Reference::DynamicIndex(static_ref))
+        } else {
+            Ok(Reference::Static(static_ref))
         }
-
-        Ok(())
     }
 
     pub fn parse_ref_expr(stream: &mut FirrtlStream<'a>)
