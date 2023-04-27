@@ -17,17 +17,17 @@ use crate::token::*;
 #[derive(Debug)]
 pub struct FirrtlTokenizedLine {
     /// List of tokens
-    tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     /// Indentation level of this line
-    indent_level: usize,
+    pub indent_level: usize,
     /// Optional FIRRTL-defined source file info
-    info: Option<String>,
+    pub info: Option<String>,
     /// Original line number in the source .fir file
-    sf_line: usize,
+    pub sf_line: usize,
     /// The span of each [Token] in the original source file content
-    spans: Vec<Range<usize>>,
+    pub spans: Vec<Range<usize>>,
     /// The original string before tokenization
-    content: String,
+    pub content: String,
 }
 impl FirrtlTokenizedLine {
     /// Returns the indentation level of this line
@@ -48,71 +48,8 @@ impl FirrtlTokenizedLine {
     }
 }
 
-/// Used to convert a [FirrtlFile] into a set of [FirrtlTokenizedLine].
-///
-/// # Implementation Details
-///
-/// It's a lot easier to deal with things line-by-line, since FIRRTL
-/// depends on indentation (and otherwise doesn't care about whitespace).
-///
-pub struct FirrtlLexer;
-impl FirrtlLexer {
-
-    /// Tokenize each [FirrtlLine] in the provided [FirrtlFile], producing a 
-    /// list of [FirrtlTokenizedLine].
-    pub fn lex(sf: &FirrtlFile) -> Vec<FirrtlTokenizedLine> {
-        let mut tokenized_lines = Vec::new();
-
-        for sfl in &sf.lines {
-            let sf_line       = sfl.line_number();
-            let sf_line_start = sfl.line_start();
-            let indent_level  = sfl.indent_level();
-
-            // FIRRTL "file info" optionally comes at the end of a line. 
-            // Separate meaningful line content from any file info.
-            let (content, info) = if let Some(idx) = sfl.contents().find('@') {
-                (&sfl.contents()[..idx], Some(sfl.contents()[idx..].to_string()))
-            } else {
-                (sfl.contents(), None)
-            };
-
-            // Extract a set of tokens/spans from each line
-            let mut tokens = Vec::new();
-            let mut spans  = Vec::new();
-            let mut lexer = Token::lexer(&content);
-            while let Some(t) = lexer.next() {
-                let perline_span = lexer.span();
-                let start = sf_line_start + perline_span.start;
-                let end   = sf_line_start + perline_span.end;
-                let token_span = start..end;
-                match t {
-                    Ok(token) => {
-                        tokens.push(token);
-                        spans.push(token_span);
-                    },
-                    // Some error occured while tokenizing this line.
-                    // FIXME: Proper error-handling instead of panic!()
-                    Err(e) => {
-                        println!("{:?}", e);
-                        panic!("unknown token at line {}, offset {:?}",
-                               sf_line, token_span);
-                    },
-                }
-            }
-            let tokenized_line = FirrtlTokenizedLine {
-                tokens, spans, sf_line, info, indent_level,
-                content: content.to_string(),
-            };
-            tokenized_lines.push(tokenized_line);
-        }
-        tokenized_lines
-    }
-}
 
 /// FIRRTL parse error.
-///
-/// NOTE: At some point, you might want fancy spanned errors 
-/// (ie. with [miette] or something similar)
 #[derive(Debug)]
 pub enum FirrtlStreamErr {
     ExpectedToken(String),
@@ -121,26 +58,39 @@ pub enum FirrtlStreamErr {
     Other(&'static str),
 }
 
+pub struct FirrtlParseError {
+}
+pub struct FirrtlParseWarning {
+}
+
 /// State used to implement a parser over some set of [FirrtlTokenizedLine].
 pub struct FirrtlStream<'a> {
+    /// Reference to some tokenized FIRRTL source file.
+    file: &'a FirrtlFile,
+
     /// The set of tokenized lines in the stream
-    lines: &'a [FirrtlTokenizedLine],
+    //lines: &'a [FirrtlTokenizedLine],
+
     /// The total number of tokenized lines in the stream
     length: usize,
 
     /// Per-module context for allowing a parser to resolve ambiguity between 
-    /// "identifiers" and "keywords"
+    /// "identifiers" and "keywords".
+    ///
+    /// NOTE: At some point, it would be nice if we didn't need this
     module_ctx: BTreeSet<&'a str>,
+
     /// The index of the current line
     gcur: usize,
     /// The index of the current token [within the current line]
     lcur: usize,
 }
 impl <'a> FirrtlStream<'a> {
-    pub fn new(lines: &'a [FirrtlTokenizedLine]) -> Self { 
+    //pub fn new(file: &'a FirrtlFile, lines: &'a [FirrtlTokenizedLine]) -> Self { 
+    pub fn new(file: &'a FirrtlFile) -> Self { 
         Self { 
-            lines,
-            length: lines.len(),
+            file,
+            length: file.lines.len(),
             module_ctx: BTreeSet::new(),
             gcur: 0,
             lcur: 0,
@@ -156,7 +106,10 @@ impl <'a> FirrtlStream<'a> {
     pub fn add_module_ctx(&mut self, kw: &'a str) {
         self.module_ctx.insert(kw);
     }
+}
 
+impl <'a> FirrtlStream<'a> {
+    /// Move to the next token in the stream. 
     pub fn next_token(&mut self) {
         if self.lcur == self.line().len() - 1 {
             self.gcur += 1;
@@ -164,8 +117,9 @@ impl <'a> FirrtlStream<'a> {
         } else { 
             self.lcur += 1;
         }
-        //assert!(self.lcur < self.lines[self.gcur].tokens.len());
     }
+
+    /// Explicitly move to the next line in the stream. 
     pub fn next_line(&mut self) {
         self.gcur += 1;
         self.lcur  = 0;
@@ -174,7 +128,7 @@ impl <'a> FirrtlStream<'a> {
 
     /// Get the current line
     pub fn line(&self) -> &'a FirrtlTokenizedLine {
-        &self.lines[self.gcur]
+        &self.file.lines[self.gcur]
     }
 
     /// Returns 'true' when the current cursor points to the start of a line.
@@ -184,89 +138,62 @@ impl <'a> FirrtlStream<'a> {
 
     /// Get the current token
     pub fn token(&self) -> &'a Token {
-        &self.lines[self.gcur].tokens[self.lcur]
+        &self.file.lines[self.gcur].tokens[self.lcur]
     }
 
     /// Get a slice of the remaining tokens on the current line
     pub fn remaining_tokens(&self) -> &'a [Token] {
-        &self.lines[self.gcur].tokens[self.lcur..]
+        &self.file.lines[self.gcur].tokens[self.lcur..]
     }
 
     /// Get the current indentation level.
     ///
-    /// NOTe: Returns `0` if the stream has reached EOF.
+    /// NOTE: Returns `0` if the stream has reached EOF.
     pub fn indent_level(&self) -> usize {
         if self.gcur >= self.length {
             0
         } else {
-            self.lines[self.gcur].indent_level()
+            self.file.lines[self.gcur].indent_level()
         }
     }
 
-    pub fn peek_line(&self) -> &'a FirrtlTokenizedLine {
-        &self.lines[self.gcur + 1]
-    }
-
-    pub fn peek_token(&self) -> &'a Token {
-        &self.lines[self.gcur].tokens[self.lcur + 1]
-    }
-
+    /// Peek at the token 'N'-steps ahead of the cursor. 
     pub fn peekn_token(&self, n: usize) -> &'a Token {
-        &self.lines[self.gcur].tokens[self.lcur + n]
+        assert!(self.lcur + n < self.line().len());
+        &self.file.lines[self.gcur].tokens[self.lcur + n]
     }
 
+}
 
-    pub fn get_identkw(&self) -> Result<&'a str, FirrtlStreamErr> {
-        if let Token::IdentKw(s) = self.token() {
-            Ok(s)
+/// For recovering the span from the original file during error-handling.
+impl <'a> FirrtlStream<'a> {
+    fn get_source_line(&self) -> usize { 
+        self.line().sf_line
+    }
+
+    fn get_source_span(&self) -> miette::SourceSpan {
+        let s = self.line().spans[self.lcur].start;
+        let e = self.line().spans[self.lcur].end;
+        miette::SourceSpan::new(s.into(), e.into())
+    }
+
+    fn build_parse_error(&self) {
+        use miette::{ SourceSpan, NamedSource };
+        let span = self.get_source_span();
+        let content = self.file.raw_contents.clone();
+        let src  = NamedSource::new(&self.file.filename, content);
+    }
+}
+
+/// All of these methods attempt to *match* the underlying data from a [Token]. 
+impl <'a> FirrtlStream<'a> {
+    pub fn match_punc(&self, p: &'a str) -> Result<(), FirrtlStreamErr> {
+        if self.token() == &Token::punctuation_from_str(p) {
+            Ok(())
         } else { 
-            let e = format!("expected Token::IdentKw, got {:?}",
-                            self.token());
-            Err(FirrtlStreamErr::ExpectedToken(e))
+            Err(FirrtlStreamErr::ExpectedPunctuation(p.to_string()))
         }
     }
-
-    pub fn get_lit_int(&self) -> Result<&'a str, FirrtlStreamErr> {
-        if let Some(lit) = self.token().get_lit_int() {
-            Ok(lit)
-        } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected lit int".to_string()))
-        }
-    }
-    pub fn get_lit_sint(&self) -> Result<&'a str, FirrtlStreamErr> {
-        if let Some(lit) = self.token().get_lit_sint() {
-            Ok(lit)
-        } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected lit sint".to_string()))
-        }
-    }
-
-
-    pub fn get_lit_float(&self) -> Result<&'a str, FirrtlStreamErr> {
-        if let Some(lit) = self.token().get_lit_float() {
-            Ok(lit)
-        } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected lit flt".to_string()))
-        }
-    }
-
-
-    pub fn get_lit_str(&self) -> Result<&'a str, FirrtlStreamErr> {
-        if let Some(lit) = self.token().get_lit_str() {
-            Ok(lit)
-        } else {
-            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
-        }
-    }
-
-    pub fn get_lit_raw_str(&self) -> Result<&'a str, FirrtlStreamErr> {
-        if let Some(lit) = self.token().get_raw_str() {
-            Ok(lit)
-        } else {
-            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
-        }
-    }
-
 
     pub fn match_identkw(&self, kw: &'a str) -> Result<(), FirrtlStreamErr> {
         let idkw = self.get_identkw()?;
@@ -289,15 +216,54 @@ impl <'a> FirrtlStream<'a> {
             Err(FirrtlStreamErr::ExpectedKeyword(estr))
         }
     }
+}
 
-    pub fn match_punc(&self, p: &'a str) -> Result<(), FirrtlStreamErr> {
-        if self.token() == &Token::punctuation_from_str(p) {
-            Ok(())
+/// All of these methods attempt to *read* the underlying data from a [Token]. 
+impl <'a> FirrtlStream<'a> {
+    pub fn get_identkw(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Token::IdentKw(s) = self.token() {
+            Ok(s)
         } else { 
-            Err(FirrtlStreamErr::ExpectedPunctuation(p.to_string()))
+            let e = format!("expected Token::IdentKw, got {:?}",
+                            self.token());
+            Err(FirrtlStreamErr::ExpectedToken(e))
         }
     }
-
+    pub fn get_lit_int(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_int() {
+            Ok(lit)
+        } else { 
+            Err(FirrtlStreamErr::ExpectedToken("expected lit int".to_string()))
+        }
+    }
+    pub fn get_lit_sint(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_sint() {
+            Ok(lit)
+        } else { 
+            Err(FirrtlStreamErr::ExpectedToken("expected lit sint".to_string()))
+        }
+    }
+    pub fn get_lit_float(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_float() {
+            Ok(lit)
+        } else { 
+            Err(FirrtlStreamErr::ExpectedToken("expected lit flt".to_string()))
+        }
+    }
+    pub fn get_lit_str(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_lit_str() {
+            Ok(lit)
+        } else {
+            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
+        }
+    }
+    pub fn get_lit_raw_str(&self) -> Result<&'a str, FirrtlStreamErr> {
+        if let Some(lit) = self.token().get_raw_str() {
+            Ok(lit)
+        } else {
+            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
+        }
+    }
 }
 
 

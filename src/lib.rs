@@ -22,9 +22,11 @@ mod tests {
         let mut f = File::open(filename).unwrap();
         let mut s = String::new();
         f.read_to_string(&mut s).unwrap();
-        let sf    = FirrtlFile::new(filename, &s);
-        let tok   = FirrtlLexer::lex(&sf);
-        let mut stream = FirrtlStream::new(&tok);
+
+        // Load a new [FirrtlFile]
+        let sf = FirrtlFile::new(filename, &s);
+
+        let mut stream = FirrtlStream::new(&sf);
         let circuit = FirrtlParser::parse(&mut stream)?;
         circuit.dump();
         Ok(())

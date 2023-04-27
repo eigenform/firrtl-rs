@@ -1,5 +1,10 @@
 
-/// A suitably-trimmed "line" (without comments) in some [FirrtlFile].
+use crate::lex;
+use crate::token;
+
+/// A suitably-trimmed "line" (without comments).
+///
+/// NOTE: This is only used during tokenization.
 #[derive(Debug)]
 pub struct FirrtlLine {
     /// The line number in the original source file
@@ -28,25 +33,18 @@ impl FirrtlLine {
 pub struct FirrtlFile {
     /// Source filename
     pub filename: String,
-
-    /// Set of effective lines. 
-    ///
-    /// Each element in this list corresponds to some *effective* line
-    /// in the source file, along with the location in the original file.
-    pub lines: Vec<FirrtlLine>,
+    /// Original file contents
+    pub raw_contents: String,
+    /// Set of tokenized, "effective" lines
+    pub lines: Vec<lex::FirrtlTokenizedLine>,
 }
 impl FirrtlFile {
-    fn char_is_indent_whitespace(c: &char) -> bool {
-        c == &' ' || c == &'\t'
-    }
-
-    fn char_is_whitespace(c: &char) -> bool {
-        c == &' ' || c == &'\t' || c == &','
-    }
-
     /// Given some string containing the contents of a .fir file, produce a 
     /// list of lines ([FirrtlLine]) that contain meaningful data.
     fn read_lines(content: &str) -> Vec<FirrtlLine> {
+        fn char_is_indent_whitespace(c: &char) -> bool {
+            c == &' ' || c == &'\t'
+        }
         let mut res = Vec::new();
 
         // NOTE: These line numbers start at 0, not 1!
@@ -54,7 +52,7 @@ impl FirrtlFile {
         for (original_line_num, line) in lines {
             // The indentation level of this line
             let indent_level = line.chars()
-                .take_while(|c| Self::char_is_indent_whitespace(c))
+                .take_while(|c| char_is_indent_whitespace(c))
                 .count();
 
             // Actual line contents start *after* any indentation
@@ -81,9 +79,65 @@ impl FirrtlFile {
         res
     }
 
+    /// Tokenize a set of [FirrtlLine] into a list of [FirrtlTokenizedLine].
+    pub fn tokenize_lines(lines: &[FirrtlLine]) 
+        -> Vec<lex::FirrtlTokenizedLine> 
+    {
+        use logos::Logos;
+        let mut tokenized_lines = Vec::new();
+
+        for sfl in lines {
+            let sf_line       = sfl.line_number();
+            let sf_line_start = sfl.line_start();
+            let indent_level  = sfl.indent_level();
+
+            // FIRRTL "file info" optionally comes at the end of a line. 
+            // Separate meaningful line content from any file info.
+            let (content, info) = if let Some(idx) = sfl.contents().find('@') {
+                (&sfl.contents()[..idx], Some(sfl.contents()[idx..].to_string()))
+            } else {
+                (sfl.contents(), None)
+            };
+
+            // Extract a set of tokens/spans from each line
+            let mut tokens = Vec::new();
+            let mut spans  = Vec::new();
+            let mut lexer = token::Token::lexer(&content);
+            while let Some(t) = lexer.next() {
+                let perline_span = lexer.span();
+                let start = sf_line_start + perline_span.start;
+                let end   = sf_line_start + perline_span.end;
+                let token_span = start..end;
+                match t {
+                    Ok(token) => {
+                        tokens.push(token);
+                        spans.push(token_span);
+                    },
+                    // Some error occured while tokenizing this line.
+                    // FIXME: Proper error-handling instead of panic!()
+                    Err(e) => {
+                        println!("{:?}", e);
+                        panic!("unknown token at line {}, offset {:?}",
+                               sf_line, token_span);
+                    },
+                }
+            }
+            let tokenized_line = lex::FirrtlTokenizedLine {
+                tokens, spans, sf_line, info, indent_level,
+                content: content.to_string(),
+            };
+            tokenized_lines.push(tokenized_line);
+        }
+        tokenized_lines
+    }
+
     pub fn new(filename: &str, contents: &str) -> Self {
-        let lines = Self::read_lines(contents);
+        // Preprocess into a set of [FirrtlLine]
+        let raw_lines = Self::read_lines(contents);
+        // Produce a set of [FirrtlTokenizedLine]
+        let lines = Self::tokenize_lines(&raw_lines);
         Self { 
+            raw_contents: contents.to_string(),
             filename: filename.to_string(),
             lines
         }
