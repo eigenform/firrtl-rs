@@ -11,8 +11,6 @@ mod tests {
     use crate::file::*;
     use crate::lex::*;
     use crate::parse::*;
-    use crate::ast::*;
-
 
     #[test]
     fn circt_parse_basic() -> Result<(), FirrtlStreamErr> {
@@ -27,7 +25,7 @@ mod tests {
         let tok   = FirrtlLexer::lex(&sf);
         let mut stream = FirrtlStream::new(&tok);
         let circuit = FirrtlParser::parse(&mut stream)?;
-        println!("{:#?}", circuit);
+        circuit.dump();
         Ok(())
     }
 

@@ -153,7 +153,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_port(stream: &mut FirrtlStream<'a>)
-        -> Result<PortDeclaration, FirrtlStreamErr>
+        -> Result<PortDecl, FirrtlStreamErr>
     {
         let dir = match stream.get_identkw()? {
             "input"  => Direction::Input,
@@ -169,7 +169,7 @@ impl <'a> FirrtlParser {
         stream.match_punc(":")?;
         stream.next_token();
         let ty = FirrtlParser::parse_type(stream)?;
-        Ok(PortDeclaration::new(id, dir, ty))
+        Ok(PortDecl::new(id, dir, ty))
     }
 
     /// Returns 'true' if the current input qualifies as a port declaration.
@@ -185,7 +185,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_portlist(stream: &mut FirrtlStream<'a>)
-        -> Result<Vec<PortDeclaration>, FirrtlStreamErr>
+        -> Result<Vec<PortDecl>, FirrtlStreamErr>
     {
         let mut portlist = Vec::new();
         let body_indent_level = stream.indent_level();

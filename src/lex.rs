@@ -277,6 +277,7 @@ impl <'a> FirrtlStream<'a> {
         }
     }
 
+    /// Return the first matching keyword
     pub fn match_identkw_multi(&self, kw: &[&'a str]) 
         -> Result<&'a str, FirrtlStreamErr>
     {

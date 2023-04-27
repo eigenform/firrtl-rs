@@ -1,8 +1,10 @@
 
+use std::fmt;
+
 #[derive(Debug)]
 pub struct Circuit { 
     id: String,
-    modules:    Vec<Module>,
+    modules: Vec<Module>,
     intmodules: Vec<IntModule>,
     extmodules: Vec<ExtModule>,
 }
@@ -26,17 +28,142 @@ impl Circuit {
     }
 }
 
+pub fn dump_indent_stmt(indent: usize, statement: &Statement) {
+    match statement {
+        Statement::Reg(id, ty) => {
+            println!("{:idt$}reg {}: {}", "", id, ty, idt=indent);
+        },
+        Statement::Wire(id, ty) => {
+            println!("{:idt$}wire {}: {}", "", id, ty, idt=indent);
+        },
+        Statement::Inst(id, mid) => {
+            println!("{:idt$}inst {} of {}", "", id, mid, idt=indent);
+        },
+        Statement::Node(id, expr) => {
+            println!("{:idt$}node {} = {}", "", id, expr, idt=indent);
+        },
+
+        // FIXME: We're *always* expanding single-line 'when' and 'else'
+        Statement::When(condexpr, wblk, eblk) => {
+            println!("{:idt$}when {} :", "", condexpr, idt=indent);
+            for s in wblk {
+                dump_indent_stmt(indent+2, s);
+            }
+            if !eblk.is_empty() {
+                println!("{:idt$}else :", "", idt=indent);
+                for s in eblk {
+                    dump_indent_stmt(indent+2, s);
+                }
+            }
+        },
+
+        Statement::Connect(r, e) => {
+            println!("{:idt$}connect {}, {}", "", r, e, idt=indent);
+        },
+        Statement::PartialConnect(r, e) => {
+            println!("{:idt$}{} <- {}", "", r, e, idt=indent);
+        },
+        Statement::Invalidate(r) => {
+            println!("{:idt$}invalidate {}", "", r, idt=indent);
+        },
+        Statement::Skip => {
+            println!("{:idt$}skip", "", idt=indent);
+        },
+        Statement::Printf(e1, e2, s, args) => {
+            if args.is_empty() {
+                println!("{:idt$}printf({}, {}, {})", "", 
+                        e1, e2, s, idt=indent);
+            } else {
+                let arglist: String = args.iter()
+                    .map(|x| x.to_string() + ", ").collect::<String>();
+                let argstr = arglist.trim_end_matches(", ");
+                println!("{:idt$}printf({}, {}, {}, {})", "", 
+                        e1, e2, s, argstr, idt=indent);
+            }
+        },
+        Statement::Stop(e1, e2, val) => {
+            println!("{:idt$}stop({}, {}, {})", "", e1, e2, val, idt=indent);
+        },
+        Statement::Unimplemented(s) => {
+            println!("{:idt$}unimpl_{}()", "", s, idt=indent);
+        }
+        Statement::Mem(decl) => {
+            println!("{:idt$}mem {} :", "", decl.id, idt=indent);
+            println!("{:idt$}data-type => {}", "", decl.ty, idt=indent+2);
+            println!("{:idt$}depth => {}", "", decl.depth, idt=indent+2);
+            println!("{:idt$}read-latency => {}", "", 
+                decl.read_latency, idt=indent+2
+            );
+            println!("{:idt$}write-latency => {}", "", 
+                decl.write_latency, idt=indent+2
+            );
+            println!("{:idt$}read-under-write => {}", "", 
+                decl.read_under_write, idt=indent+2
+            );
+            for rp in &decl.rp_list {
+                println!("{:idt$}reader => {}", "", rp, idt=indent+2);
+            }
+            for wp in &decl.wp_list {
+                println!("{:idt$}writer => {}", "", wp, idt=indent+2);
+            }
+            for rwp in &decl.rwp_list {
+                println!("{:idt$}readwriter => {}", "", rwp, idt=indent+2);
+            }
+        }
+        Statement::Attach(refs) => {
+            let reflist: String = refs.iter().map(|x| x.to_string() + ", ")
+                .collect::<String>();
+            let s = reflist.trim_end_matches(", ");
+            println!("{:idt$}attach({})", "", s, idt=indent);
+        },
+        Statement::Define(sr, re) => {
+            println!("{:idt$}define {} = {}", "", sr, re, idt=indent);
+        },
+        Statement::ForceInitial(re, e) => {
+            println!("{:idt$}force_initial({}, {})", "", re, e, idt=indent);
+        },
+        Statement::Force(e1, e2, re, e3) => {
+            println!("{:idt$}force({}, {}, {}, {})", "", 
+                e1, e2, re, e3, idt=indent);
+        },
+        Statement::Release(e1, e2, re) => {
+            println!("{:idt$}release({}, {}, {})", "", 
+                e1, e2, re, idt=indent);
+        },
+        Statement::ReleaseInitial(re) => {
+            println!("{:idt$}release_initial({})", "", re, idt=indent);
+        },
+        _ => panic!("{:?}", statement),
+    }
+}
+
+impl Circuit {
+    pub fn dump(&self) {
+        println!("circuit {}:", self.id);
+        for m in &self.modules {
+            println!("{:idt$}module {}:", "", m.id, idt=2);
+            for port in &m.ports {
+                println!("{:idt$}{}", "", port, idt=4);
+            }
+            for s in &m.statements {
+                dump_indent_stmt(4, s);
+            }
+        }
+    }
+}
+
+
 
 #[derive(Debug)]
 pub struct Module {
     id: String,
-    ports: Vec<PortDeclaration>,
+    ports: Vec<PortDecl>,
     statements: Vec<Statement>,
 }
 impl Module {
     pub fn new(
         id: impl ToString, 
-        ports: Vec<PortDeclaration>, 
+        ports: Vec<PortDecl>, 
         statements: Vec<Statement>
     ) -> Self 
     {
@@ -47,10 +174,10 @@ impl Module {
 #[derive(Debug)]
 pub struct IntModule {
     id: String,
-    ports: Vec<PortDeclaration>,
+    ports: Vec<PortDecl>,
 }
 impl IntModule {
-    pub fn new(id: impl ToString, ports: Vec<PortDeclaration>) -> Self {
+    pub fn new(id: impl ToString, ports: Vec<PortDecl>) -> Self {
         Self {
             id: id.to_string(),
             ports
@@ -62,10 +189,10 @@ impl IntModule {
 #[derive(Debug)]
 pub struct ExtModule {
     id: String,
-    ports: Vec<PortDeclaration>,
+    ports: Vec<PortDecl>,
 }
 impl ExtModule {
-    pub fn new(id: impl ToString, ports: Vec<PortDeclaration>) -> Self {
+    pub fn new(id: impl ToString, ports: Vec<PortDecl>) -> Self {
         Self {
             id: id.to_string(),
             ports,
@@ -75,30 +202,57 @@ impl ExtModule {
 
 
 #[derive(Debug)]
-pub struct PortDeclaration {
+pub struct PortDecl {
     id: String,
     dir: Direction,
     ty: FirrtlType,
 }
-impl PortDeclaration {
+impl PortDecl {
     pub fn new(id: impl ToString, dir: Direction, ty: FirrtlType) -> Self { 
         Self { id: id.to_string(), dir, ty }
     }
 }
-
-#[derive(Debug)]
-pub enum Direction { Input, Output }
+impl fmt::Display for PortDecl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{} {} : {}", self.dir, self.id, self.ty)
+    }
+}
 
 #[derive(Debug)]
 pub enum FirrtlTypeGround {
     Clock, Reset, AsyncReset, 
     UInt(Option<usize>), SInt(Option<usize>), Analog(Option<usize>),
 }
+impl fmt::Display for FirrtlTypeGround {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        let s = match self {
+            Self::Clock => "Clock".to_string(),
+            Self::Reset => "Reset".to_string(),
+            Self::AsyncReset => "AsyncReset".to_string(),
+            Self::UInt(None) => "UInt".to_string(),
+            Self::SInt(None) => "SInt".to_string(),
+            Self::Analog(None) => "Analog".to_string(),
+            Self::UInt(Some(w)) => format!("UInt<{}>", w),
+            Self::SInt(Some(w)) => format!("SInt<{}>", w),
+            Self::Analog(Some(w)) => format!("Analog<{}>", w),
+        };
+        write!(f, "{}", s)
+    }
+}
+
 
 #[derive(Debug)]
 pub enum FirrtlTypeRef {
     Probe(Box<FirrtlType>),
     RWProbe(Box<FirrtlType>),
+}
+impl fmt::Display for FirrtlTypeRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self { 
+            Self::Probe(ty) => write!(f, "Probe<{}>", ty),
+            Self::RWProbe(ty) => write!(f, "RWProbe<{}>", ty),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -108,6 +262,24 @@ pub enum FirrtlType {
     Bundle(Vec<BundleField>),
     Ref(FirrtlTypeRef),
     None,
+}
+impl fmt::Display for FirrtlType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self { 
+            Self::Ground(g) => write!(f, "{}", g),
+            Self::Vector(ty, sz) => write!(f, "{}[{}]", ty, sz),
+            Self::Bundle(fields) => {
+                let flist: String = fields.iter().map(|x| x.to_string() + ", ")
+                    .collect::<String>();
+                let s = flist.trim_end_matches(", ");
+                write!(f, "{{ {} }}", s)
+            },
+            Self::Ref(rty) => write!(f, "{}", rty),
+            Self::None => { 
+                panic!("cant format nonetype?");
+            },
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -121,11 +293,29 @@ impl BundleField {
         Self { flip, id: id.to_string(), ty }
     }
 }
+impl fmt::Display for BundleField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        let flip = if self.flip {"flip"} else { "" };
+        if self.flip {
+            write!(f, "flip {} : {}", self.id, self.ty)
+        } else { 
+            write!(f, "{} : {}", self.id, self.ty)
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Reference {
     Static(StaticReference),
     DynamicIndex(StaticReference),
+}
+impl fmt::Display for Reference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self { 
+            Self::Static(r) => write!(f, "{}", r),
+            Self::DynamicIndex(r) => write!(f, "{}[expr..]", r),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -134,85 +324,210 @@ pub enum StaticReference {
     Subfield(Box<Self>, String),
     Subindex(Box<Self>, usize),
 }
-
-#[derive(Debug)]
-pub enum Expr {
+impl StaticReference {
+    pub fn new_static(s: impl ToString) -> Self {
+        Self::Static(s.to_string())
+    }
+}
+impl fmt::Display for StaticReference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self { 
+            Self::Static(r) => write!(f, "{}", r),
+            Self::Subfield(r, field) => write!(f, "{}.{}", r, field),
+            Self::Subindex(r, idx) => write!(f, "{}[{}]", r, idx),
+        }
+    }
 }
 
+
 #[derive(Debug)]
-pub struct WireDecl {
+pub struct MemDecl {
     id: String,
     ty: FirrtlType,
+    depth: usize,
+    write_latency: usize,
+    read_latency: usize,
+    rp_list: Vec<String>,
+    wp_list: Vec<String>,
+    rwp_list: Vec<String>,
+    read_under_write: ReadUnderWrite,
 }
-impl WireDecl {
-    pub fn new(id: impl ToString, ty: FirrtlType) -> Self {
-        Self { id: id.to_string(), ty }
+impl MemDecl {
+    pub fn new(
+        id: impl ToString, 
+        ty: FirrtlType,
+        depth: usize,
+        read_latency: usize,
+        write_latency: usize,
+        read_under_write: ReadUnderWrite,
+        rp_list: Vec<String>,
+        wp_list: Vec<String>,
+        rwp_list: Vec<String>,
+    ) -> Self {
+        Self { 
+            id: id.to_string(), 
+            depth, 
+            ty, 
+            read_latency, 
+            write_latency, 
+            read_under_write,
+            rp_list, 
+            wp_list, 
+            rwp_list
+        }
     }
 }
 
-#[derive(Debug)]
-pub struct RegDecl {
-    id: String,
-    ty: FirrtlType,
-}
-impl RegDecl {
-    pub fn new(id: impl ToString, ty: FirrtlType) -> Self {
-        Self { id: id.to_string(), ty }
-    }
-}
-
-#[derive(Debug)]
-pub struct InstDecl {
-    id: String,
-    module_id: String,
-}
-impl InstDecl {
-    pub fn new(id: impl ToString, module_id: impl ToString) -> Self {
-        Self { id: id.to_string(), module_id: module_id.to_string() }
-    }
-}
 
 
 #[derive(Debug)]
 pub enum Statement {
-    Unimplemented(String),
-    Wire(WireDecl),
-    Reg(RegDecl),
-    Inst(InstDecl),
-    Connect(Reference, Expression),
-    PartialConnect(Reference, Expression),
+    Wire(String, FirrtlType),
+    Reg(String, FirrtlType),
+    Inst(String, String),
+    Mem(MemDecl),
+    Node(String, Expr),
+
+    Attach(Vec<Reference>),
+    PartialConnect(Reference, Expr),
+    Connect(Reference, Expr),
     Invalidate(Reference),
+    When(Expr, Vec<Self>, Vec<Self>),
+
+    Stop(Expr, Expr, usize),
+    Force(Expr, Expr, RefExpr, Expr),
+    Release(Expr, Expr, RefExpr),
+    ForceInitial(RefExpr, Expr),
+    ReleaseInitial(RefExpr),
+    Define(StaticReference, RefExpr),
+    Printf(Expr, Expr, String, Vec<Expr>),
+
     Skip,
+    Unimplemented(String),
 }
-impl Statement { 
-    pub fn wire_decl(id: impl ToString, ty: FirrtlType) -> Self {
-        Self::Wire(WireDecl { id: id.to_string(), ty })
-    }
-    pub fn reg_decl(id: impl ToString, ty: FirrtlType) -> Self {
-        Self::Reg(RegDecl { id: id.to_string(), ty })
-    }
-    pub fn inst_decl(id: impl ToString, module_id: impl ToString) -> Self {
-        Self::Inst(InstDecl { 
-            id: id.to_string(), 
-            module_id: module_id.to_string()
-        })
+
+#[derive(Debug)]
+pub enum Expr {
+    Ref(Reference),
+    Const(FirrtlType, LiteralNumeric),
+    Read(RefExpr),
+    Mux(Box<Self>, Box<Self>, Box<Self>),
+    PrimOp2Expr(PrimOp2Expr, Box<Self>, Box<Self>),
+    PrimOp1Expr(PrimOp1Expr, Box<Self>),
+    PrimOp1Expr1Int(PrimOp1Expr1Int, Box<Self>, usize),
+    PrimOp1Expr2Int(PrimOp1Expr2Int, Box<Self>, usize, usize),
+    None,
+}
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::Ref(r) => write!(f, "{}", r),
+            Self::Const(ty, lit) => write!(f, "{}({})", ty, lit),
+            Self::Read(rexpr) => write!(f, "read({})", rexpr),
+            Self::Mux(e1,e2,e3) => write!(f, "mux({}, {}, {})", e1, e2, e3),
+            Self::PrimOp2Expr(op, e1, e2) => {
+                write!(f, "{}({}, {})", op, e1, e2)
+            },
+            Self::PrimOp1Expr(op, e1) => write!(f, "{}({})", op, e1),
+            Self::PrimOp1Expr1Int(op, e1, lit) => {
+                write!(f, "{}({}, {})", op, e1, lit)
+            },
+            Self::PrimOp1Expr2Int(op, e1, lit1, lit2) => {
+                write!(f, "{}({}, {}, {})", op, e1, lit1, lit2)
+            },
+            Self::None => panic!("format none expr?"),
+
+        }
     }
 }
 
 #[derive(Debug)]
-pub enum Expression {
-    None,
+pub enum RefExpr {
+    Static(StaticReference),
+    RwProbe(StaticReference),
+    Probe(StaticReference),
 }
-
+impl fmt::Display for RefExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self { 
+            Self::Static(r) => write!(f, "{}", r),
+            Self::RwProbe(r) => write!(f, "rwprobe({})", r),
+            Self::Probe(r) => write!(f, "probe({})", r),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum LiteralNumeric {
-    UInt(usize),
-    SInt(isize),
+    UInt(usize), SInt(isize),
+}
+impl fmt::Display for LiteralNumeric {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self { 
+            Self::UInt(v) => write!(f, "{}", v),
+            Self::SInt(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ReadUnderWrite { 
+    Old, New, Undefined
+}
+impl ReadUnderWrite {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s { 
+            "old" => Some(Self::Old),
+            "new" => Some(Self::New),
+            "undefined" => Some(Self::Undefined),
+            _ => None,
+        }
+    }
+    pub fn to_str(&self) -> &'static str {
+        match self { 
+            Self::Old => "old",
+            Self::New => "new",
+            Self::Undefined => "undefined",
+        }
+    }
+}
+impl fmt::Display for ReadUnderWrite {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Self::to_str(self))
+    }
 }
 
 
+
+#[derive(Debug)]
+pub enum Direction { 
+    Input, Output 
+}
+impl Direction {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s { 
+            "input" => Some(Self::Input),
+            "output" => Some(Self::Output),
+            _ => None,
+        }
+    }
+    pub fn to_str(&self) -> &'static str {
+        match self { 
+            Self::Input => "input",
+            Self::Output => "output",
+        }
+    }
+}
+impl fmt::Display for Direction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Self::to_str(self))
+    }
+}
+
+
+
 // NOTE: 'dshlw' only occurs in SFC output?
+#[derive(Debug)]
 pub enum PrimOp2Expr {
     Add, Sub, Mul, Div, Mod,
     Lt, Leq, Gt, Geq, Eq, Neq,
@@ -243,8 +558,37 @@ impl PrimOp2Expr {
             _ => None,
         }
     }
+    pub fn to_str(&self) -> &'static str {
+        match self { 
+            Self::Add => "add",
+            Self::Sub => "sub",
+            Self::Mul => "mul",
+            Self::Div => "div",
+            Self::Mod => "mod",
+            Self::Lt => "lt",
+            Self::Leq => "leq",
+            Self::Gt => "gt",
+            Self::Geq => "geq",
+            Self::Eq => "eq",
+            Self::Neq => "ne",
+            Self::Dshl => "dshl",
+            Self::Dshlw => "dshlw",
+            Self::Dshr => "dsh",
+            Self::And => "and",
+            Self::Or => "or",
+            Self::Xor => "xor",
+            Self::Cat => "cat",
+        }
+    }
+}
+impl fmt::Display for PrimOp2Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Self::to_str(self))
+    }
 }
 
+
+#[derive(Debug)]
 pub enum PrimOp1Expr {
     AsUInt, AsSInt, AsClock, AsAsyncReset, Cvt,
     Neg, Not,
@@ -266,8 +610,29 @@ impl PrimOp1Expr {
             _ => None,
         }
     }
+    pub fn to_str(&self) -> &'static str {
+        match self { 
+            Self::AsUInt => "asUInt",
+            Self::AsSInt => "asSInt",
+            Self::AsClock => "asClock",
+            Self::AsAsyncReset => "asAsyncReset",
+            Self::Cvt => "cvt",
+            Self::Neg => "neg",
+            Self::Not => "not",
+            Self::Andr => "andr",
+            Self::Orr => "orr",
+            Self::Xorr => "xorr",
+        }
+    }
+}
+impl fmt::Display for PrimOp1Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Self::to_str(self))
+    }
 }
 
+
+#[derive(Debug)]
 pub enum PrimOp1Expr1Int {
     Pad, Shl, Shr, Head, Tail
 }
@@ -282,9 +647,25 @@ impl PrimOp1Expr1Int {
             _ => None,
         }
     }
+    pub fn to_str(&self) -> &'static str {
+        match self { 
+            Self::Pad => "pad",
+            Self::Shl => "shl",
+            Self::Shr => "shr",
+            Self::Head => "head",
+            Self::Tail => "tail",
+        }
+    }
+}
+impl fmt::Display for PrimOp1Expr1Int {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Self::to_str(self))
+    }
 }
 
 
+
+#[derive(Debug)]
 pub enum PrimOp1Expr2Int {
     Bits
 }
@@ -295,6 +676,17 @@ impl PrimOp1Expr2Int {
             _ => None,
         }
     }
+    pub fn to_str(&self) -> &'static str { 
+        match self { 
+            Self::Bits => "bits",
+        }
+    }
 }
+impl fmt::Display for PrimOp1Expr2Int {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Self::to_str(self))
+    }
+}
+
 
 

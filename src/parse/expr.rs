@@ -1,5 +1,4 @@
 
-
 use crate::ast::*;
 use crate::lex::*;
 use crate::token::Token;
@@ -8,6 +7,37 @@ use crate::parse::FirrtlParser;
 /// Parsing for statements and expressions.
 impl <'a> FirrtlParser {
 
+    /// Returns 'true' if the current tokens qualify as a 'reference'.
+    ///
+    /// NOTE: I think this ambiguity is from the old connect operators
+    /// and 'is invalid', which will *eventually* be deprecated.
+    pub fn check_reference(stream: &mut FirrtlStream<'a>) -> bool {
+        // References always start with Token::IdentKw
+        let Ok(symbol) = stream.get_identkw() else { 
+            return false;
+        };
+
+        let matches = &[
+            &[Token::Period],
+            &[Token::LSquare],
+            &[Token::LessEqual],
+            &[Token::LessMinus],
+            &[Token::IdentKw("is".to_string())],
+        ];
+        let rem = &stream.remaining_tokens()[1..];
+        let ctx_valid = matches.iter().any(|m| rem.starts_with(*m));
+
+        // Matching context should indicate that we have a reference.
+        // Otherwise, fall back on checking for a previously-declared symbol
+        if ctx_valid {
+            return true;
+        } 
+        else {
+            return stream.check_module_ctx(symbol);
+        }
+    }
+
+    /// Returns 'true' if the current tokens qualify as a 'primop' expression.
     pub fn check_primop_expr(stream: &FirrtlStream<'a>) -> bool {
         let Ok(kw) = stream.get_identkw() else { 
             return false;
@@ -27,6 +57,7 @@ impl <'a> FirrtlParser {
         }
     }
 
+    /// Returns 'true' if the current tokens qualify as a 'mux' expression.
     pub fn check_mux_expr(stream: &FirrtlStream<'a>) -> bool {
         if stream.remaining_tokens().len() >= 2 {
             stream.match_identkw("mux").is_ok() &&
@@ -36,6 +67,7 @@ impl <'a> FirrtlParser {
         }
     }
 
+    /// Returns 'true' if the current tokens qualify as a 'read' expression.
     pub fn check_read_expr(stream: &FirrtlStream<'a>) -> bool {
         if stream.remaining_tokens().len() >= 2 {
             stream.match_identkw("read").is_ok() &&
@@ -45,6 +77,7 @@ impl <'a> FirrtlParser {
         }
     }
 
+    /// Returns 'true' if the current tokens qualify as a constant expression.
     pub fn check_const_expr(stream: &FirrtlStream<'a>) -> bool {
         let Ok(maybe_keyword) = stream.get_identkw() else {
             return false;
@@ -82,40 +115,47 @@ impl <'a> FirrtlParser {
     //  out2 <= read(probe(agg2)).b
     //
     pub fn parse_expr(stream: &mut FirrtlStream<'a>)
-        -> Result<Expression, FirrtlStreamErr>
+        -> Result<Expr, FirrtlStreamErr>
     {
-        // This must be a static_reference (a single identifier)
         // FIXME: Can we actually assume this?
+        // If this is the last token on the line, this must be a 
+        // static_reference (a single identifier)?
         if stream.remaining_tokens().len() == 1 {
             let ident = stream.get_identkw()?;
             stream.next_token();
-            return Ok(Expression::None);
+            return Ok(Expr::Ref(
+                Reference::Static(StaticReference::new_static(ident))
+            ))
         }
 
         if FirrtlParser::check_primop_expr(stream) {
             let primop_expr = FirrtlParser::parse_primop_expr(stream)?;
+            return Ok(primop_expr);
         }
         else if FirrtlParser::check_const_expr(stream) {
             let const_expr = FirrtlParser::parse_const_expr(stream)?;
+            return Ok(const_expr);
         }
         else if FirrtlParser::check_mux_expr(stream) {
             let mux_expr = FirrtlParser::parse_mux_expr(stream)?;
+            return Ok(mux_expr);
         }
         else if FirrtlParser::check_read_expr(stream) {
             let read_expr = FirrtlParser::parse_read_expr(stream)?;
+            return Ok(read_expr);
         } 
         else if FirrtlParser::check_reference(stream) {
-            let ref_expr = FirrtlParser::parse_reference(stream)?;
+            let reference = FirrtlParser::parse_reference(stream)?;
+            return Ok(Expr::Ref(reference));
         } 
         else {
             panic!("unable to disambiguate expression? {:?}", 
                 stream.remaining_tokens());
         }
-        return Ok(Expression::None);
     }
 
     pub fn parse_mux_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Expr, FirrtlStreamErr>
     {
         stream.match_identkw("mux")?;
         stream.next_token();
@@ -128,11 +168,11 @@ impl <'a> FirrtlParser {
 
         stream.match_punc(")")?;
         stream.next_token();
-        Ok(())
+        Ok(Expr::Mux(Box::new(e1), Box::new(e2), Box::new(e3)))
     }
 
     pub fn parse_read_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Expr, FirrtlStreamErr>
     {
         stream.match_identkw("read")?;
         stream.next_token();
@@ -141,104 +181,82 @@ impl <'a> FirrtlParser {
         let ref_expr = FirrtlParser::parse_ref_expr(stream)?;
         stream.match_punc(")")?;
         stream.next_token();
-        Ok(())
+        Ok(Expr::Read(ref_expr))
     }
 
 
     pub fn parse_primop_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Expr, FirrtlStreamErr>
     {
         let primop_kw = stream.get_identkw()?;
-        if PrimOp2Expr::from_str(primop_kw).is_some() {
-            stream.next_token();
-            stream.match_punc("(")?;
-            stream.next_token();
+        stream.next_token();
+
+        stream.match_punc("(")?;
+        stream.next_token();
+
+        let expr = if let Some(op) = PrimOp2Expr::from_str(primop_kw) {
             let e1 = FirrtlParser::parse_expr(stream)?;
             let e2 = FirrtlParser::parse_expr(stream)?;
-            stream.match_punc(")")?;
-            stream.next_token();
+            Expr::PrimOp2Expr(op, Box::new(e1), Box::new(e2))
         } 
-        else if PrimOp1Expr::from_str(primop_kw).is_some() {
-            stream.next_token();
-            stream.match_punc("(")?;
-            stream.next_token();
+        else if let Some(op) = PrimOp1Expr::from_str(primop_kw) {
             let e1 = FirrtlParser::parse_expr(stream)?;
-            stream.match_punc(")")?;
-            stream.next_token();
+            Expr::PrimOp1Expr(op, Box::new(e1))
         } 
-        else if PrimOp1Expr1Int::from_str(primop_kw).is_some() {
-            stream.next_token();
-            stream.match_punc("(")?;
-            stream.next_token();
+        else if let Some(op) = PrimOp1Expr1Int::from_str(primop_kw) {
             let e1 = FirrtlParser::parse_expr(stream)?;
             let lit1 = stream.get_lit_int()?;
             stream.next_token();
-            stream.match_punc(")")?;
-            stream.next_token();
+            Expr::PrimOp1Expr1Int(op, Box::new(e1), lit1.parse().unwrap())
         } 
-        else if PrimOp1Expr2Int::from_str(primop_kw).is_some() {
-            stream.next_token();
-            stream.match_punc("(")?;
-            stream.next_token();
+        else if let Some(op) = PrimOp1Expr2Int::from_str(primop_kw) {
             let e1 = FirrtlParser::parse_expr(stream)?;
             let lit1 = stream.get_lit_int()?;
             stream.next_token();
             let lit2 = stream.get_lit_int()?;
             stream.next_token();
-            stream.match_punc(")")?;
-            stream.next_token();
+            Expr::PrimOp1Expr2Int(op, Box::new(e1),
+                lit1.parse().unwrap(), lit2.parse().unwrap()
+            )
+
         } else {
-            panic!("eh?");
-        }
-        Ok(())
+            panic!("invalid primop {:?} ?", primop_kw);
+        };
+
+        stream.match_punc(")")?;
+        stream.next_token();
+
+        Ok(expr)
     }
 
     pub fn parse_const_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr>
+        -> Result<Expr, FirrtlStreamErr>
     {
-        let sint_or_uint = stream.get_identkw()?;
+        let kw = stream.match_identkw_multi(&["SInt", "UInt"])?;
         stream.next_token();
+
         let width = FirrtlParser::parse_optional_typewidth(stream)?;
+
         stream.match_punc("(")?;
         stream.next_token();
-        let lit_val = match sint_or_uint {
-            "SInt" => stream.token().get_signed_numeric_literal(),
+        let lit = match kw {
             "UInt" => stream.token().get_unsigned_numeric_literal(),
+            "SInt" => stream.token().get_signed_numeric_literal(),
             _ => unreachable!(),
         };
         stream.next_token();
         stream.match_punc(")")?;
         stream.next_token();
-        Ok(())
-    }
 
-
-    /// Determine if the following tokens qualify as a "reference"
-    pub fn check_reference(stream: &mut FirrtlStream<'a>) -> bool {
-        // References always start with Token::IdentKw
-        let Ok(symbol) = stream.get_identkw() else { 
-            return false;
+        let ty = match kw {
+            "UInt" => FirrtlType::Ground(FirrtlTypeGround::UInt(width)),
+            "SInt" => FirrtlType::Ground(FirrtlTypeGround::SInt(width)),
+            _ => unreachable!(),
         };
 
-        let matches = &[
-            &[Token::Period],
-            &[Token::LSquare],
-            &[Token::LessEqual],
-            &[Token::LessMinus],
-            &[Token::IdentKw("is".to_string())],
-        ];
-        let rem = &stream.remaining_tokens()[1..];
-        let ctx_valid = matches.iter().any(|m| rem.starts_with(*m));
-
-        // Matching context should indicate that we have a reference.
-        // Otherwise, fall back on checking for a previously-declared symbol
-        if ctx_valid {
-            return true;
-        } 
-        else {
-            return stream.check_module_ctx(symbol);
-        }
+        Ok(Expr::Const(ty, lit.unwrap()))
     }
+
 
     pub fn parse_static_reference(stream: &mut FirrtlStream<'a>)
         -> Result<StaticReference, FirrtlStreamErr>
@@ -316,9 +334,8 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_ref_expr(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<RefExpr, FirrtlStreamErr>
     {
-
         // This must be 'probe(<static_ref>)' or 'rwprobe(<static_ref>)'
         if stream.peekn_token(1).match_punc("(").unwrap_or(false) {
             let kw = stream.match_identkw_multi(&["probe", "rwprobe"])?;
@@ -328,12 +345,16 @@ impl <'a> FirrtlParser {
             let static_ref = FirrtlParser::parse_static_reference(stream)?;
             stream.match_punc(")")?;
             stream.next_token();
-            Ok(())
+            match kw {
+                "probe" => Ok(RefExpr::Probe(static_ref)),
+                "rwprobe" => Ok(RefExpr::RwProbe(static_ref)),
+                _ => panic!("unexpected keyword {:?}", kw),
+            }
         } 
         // Otherwise this is just a static reference
         else {
             let static_ref = FirrtlParser::parse_static_reference(stream)?;
-            Ok(())
+            Ok(RefExpr::Static(static_ref))
         }
     }
 
