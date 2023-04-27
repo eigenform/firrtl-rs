@@ -8,6 +8,9 @@ mod parse;
 pub mod file;
 pub mod ast;
 
+pub use lex::FirrtlParseError;
+pub use file::FirrtlFile;
+
 #[cfg(test)]
 mod tests {
     use crate::file::*;
@@ -19,8 +22,8 @@ mod tests {
         use std::fs::File;
         use std::io::*;
 
-        //let filename = "./parse-basic.fir";
-        let filename = "./chisel-tests/firrtl/GCD.fir";
+        //let filename = "../parse-basic.fir";
+        let filename = "../chisel-tests/firrtl/GCD.fir";
         let sf = FirrtlFile::from_file(filename);
         let circuit = sf.parse()?;
 

@@ -58,6 +58,24 @@ pub enum ParseErrorKind {
     ExpectedPunctuation(String),
     Other(String),
 }
+impl ParseErrorKind {
+    pub fn message(&self) -> String {
+        match self { 
+            Self::ExpectedToken(s) => { 
+                format!("Expected token: '{}'", s)
+            },
+            Self::ExpectedKeyword(s) => { 
+                format!("Expected keyword/s: '{}'", s)
+            },
+            Self::ExpectedPunctuation(s) => { 
+                format!("Expected punctuation: '{}'", s)
+            },
+            Self::Other(s) => { 
+                format!("Parse error: '{}'", s)
+            },
+        }
+    }
+}
 
 /// FIRRTL parser error.
 #[derive(Debug)]

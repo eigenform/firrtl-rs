@@ -4,3 +4,5 @@
 /chisel-tests/target
 /chisel-tests/project
 /chisel-tests/.bsp
+*.fir
+*.lock

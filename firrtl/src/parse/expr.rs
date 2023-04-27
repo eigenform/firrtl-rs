@@ -266,10 +266,16 @@ impl <'a> FirrtlParser {
         stream.next_token();
         let base_ref = StaticReference::Static(ref_ident.to_string());
 
+        let indent = stream.indent_level();
+
         let mut reference = base_ref;
 
         // ... followed by some arbitrary list of subfield/subindex
         loop {
+            if stream.indent_level() < indent {
+                break;
+            }
+
             // Must be a subfield access
             if stream.match_punc(".").is_ok() {
                 stream.next_token();
@@ -320,6 +326,11 @@ impl <'a> FirrtlParser {
 
         // All references are *at least* composed of a static reference
         let static_ref = FirrtlParser::parse_static_reference(stream)?;
+
+        // There's nothing else on the line for us to consume
+        if stream.is_sol() {
+            return Ok(Reference::Static(static_ref));
+        }
 
         // Optional dynamic indexing with some expression
         if stream.match_punc("[").is_ok() {
