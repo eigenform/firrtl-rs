@@ -115,7 +115,7 @@ impl <'a> FirrtlParser {
     //  out2 <= read(probe(agg2)).b
     //
     pub fn parse_expr(stream: &mut FirrtlStream<'a>)
-        -> Result<Expr, FirrtlStreamErr>
+        -> Result<Expr, FirrtlParseError>
     {
         // FIXME: Can we actually assume this?
         // If this is the last token on the line, this must be a 
@@ -155,7 +155,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_mux_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<Expr, FirrtlStreamErr>
+        -> Result<Expr, FirrtlParseError>
     {
         stream.match_identkw("mux")?;
         stream.next_token();
@@ -172,7 +172,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_read_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<Expr, FirrtlStreamErr>
+        -> Result<Expr, FirrtlParseError>
     {
         stream.match_identkw("read")?;
         stream.next_token();
@@ -186,7 +186,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_primop_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<Expr, FirrtlStreamErr>
+        -> Result<Expr, FirrtlParseError>
     {
         let primop_kw = stream.get_identkw()?;
         stream.next_token();
@@ -230,7 +230,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_const_expr(stream: &mut FirrtlStream<'a>) 
-        -> Result<Expr, FirrtlStreamErr>
+        -> Result<Expr, FirrtlParseError>
     {
         let kw = stream.match_identkw_multi(&["SInt", "UInt"])?;
         stream.next_token();
@@ -259,7 +259,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_static_reference(stream: &mut FirrtlStream<'a>)
-        -> Result<StaticReference, FirrtlStreamErr>
+        -> Result<StaticReference, FirrtlParseError>
     {
         // References *must* begin with an identifier
         let ref_ident = stream.get_identkw()?;
@@ -314,7 +314,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_reference(stream: &mut FirrtlStream<'a>)
-        -> Result<Reference, FirrtlStreamErr>
+        -> Result<Reference, FirrtlParseError>
     {
         //println!("parsing reference @ {:?}", stream.remaining_tokens());
 
@@ -334,7 +334,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_ref_expr(stream: &mut FirrtlStream<'a>)
-        -> Result<RefExpr, FirrtlStreamErr>
+        -> Result<RefExpr, FirrtlParseError>
     {
         // This must be 'probe(<static_ref>)' or 'rwprobe(<static_ref>)'
         if stream.peekn_token(1).match_punc("(").unwrap_or(false) {

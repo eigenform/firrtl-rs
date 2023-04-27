@@ -1,12 +1,14 @@
+//! Elements in the FIRRTL abstract syntax tree. 
 
 use std::fmt;
 
+/// FIRRTL circuit (`circuit`)
 #[derive(Debug)]
 pub struct Circuit { 
-    id: String,
-    modules: Vec<Module>,
-    intmodules: Vec<IntModule>,
-    extmodules: Vec<ExtModule>,
+    pub id: String,
+    pub modules: Vec<Module>,
+    pub intmodules: Vec<IntModule>,
+    pub extmodules: Vec<ExtModule>,
 }
 impl Circuit {
     pub fn new(id: impl ToString) -> Self { 
@@ -26,126 +28,126 @@ impl Circuit {
     pub fn add_extmodule(&mut self, m: ExtModule) {
         self.extmodules.push(m);
     }
-}
 
-pub fn dump_indent_stmt(indent: usize, statement: &Statement) {
-    match statement {
-        Statement::Reg(id, ty, clkexpr, rvexpr) => {
-            if let Some((reset_expr, val_expr)) = rvexpr { 
-                println!("{:idt$}reg {}: {}, {} with:", "", 
-                         id, ty, clkexpr, idt=indent);
-                println!("{:idt$}(reset => ({}, {}))", "", 
-                         reset_expr, val_expr, idt=indent+2);
-            } else { 
-                println!("{:idt$}reg {}: {}, {}", "", 
-                         id, ty, clkexpr, idt=indent);
-            }
-        },
-        Statement::Wire(id, ty) => {
-            println!("{:idt$}wire {}: {}", "", id, ty, idt=indent);
-        },
-        Statement::Inst(id, mid) => {
-            println!("{:idt$}inst {} of {}", "", id, mid, idt=indent);
-        },
-        Statement::Node(id, expr) => {
-            println!("{:idt$}node {} = {}", "", id, expr, idt=indent);
-        },
+    /// Print a FIRRTL statement with some indentation level
+    fn dump_indent_stmt(indent: usize, statement: &Statement) {
+        match statement {
+            Statement::Reg(id, ty, clkexpr, rvexpr) => {
+                if let Some((reset_expr, val_expr)) = rvexpr { 
+                    println!("{:idt$}reg {}: {}, {} with:", "", 
+                             id, ty, clkexpr, idt=indent);
+                    println!("{:idt$}(reset => ({}, {}))", "", 
+                             reset_expr, val_expr, idt=indent+2);
+                } else { 
+                    println!("{:idt$}reg {}: {}, {}", "", 
+                             id, ty, clkexpr, idt=indent);
+                }
+            },
+            Statement::Wire(id, ty) => {
+                println!("{:idt$}wire {}: {}", "", id, ty, idt=indent);
+            },
+            Statement::Inst(id, mid) => {
+                println!("{:idt$}inst {} of {}", "", id, mid, idt=indent);
+            },
+            Statement::Node(id, expr) => {
+                println!("{:idt$}node {} = {}", "", id, expr, idt=indent);
+            },
 
-        // FIXME: We're *always* expanding single-line 'when' and 'else'
-        Statement::When(condexpr, wblk, eblk) => {
-            println!("{:idt$}when {} :", "", condexpr, idt=indent);
-            for s in wblk {
-                dump_indent_stmt(indent+2, s);
+            // FIXME: We're *always* expanding single-line 'when' and 'else'
+            Statement::When(condexpr, wblk, eblk) => {
+                println!("{:idt$}when {} :", "", condexpr, idt=indent);
+                for s in wblk {
+                    Self::dump_indent_stmt(indent+2, s);
+                }
+                if !eblk.is_empty() {
+                    println!("{:idt$}else :", "", idt=indent);
+                    for s in eblk {
+                        Self::dump_indent_stmt(indent+2, s);
+                    }
+                }
+            },
+
+            Statement::Connect(r, e) => {
+                println!("{:idt$}connect {}, {}", "", r, e, idt=indent);
+            },
+            Statement::PartialConnect(r, e) => {
+                println!("{:idt$}{} <- {}", "", r, e, idt=indent);
+            },
+            Statement::Invalidate(r) => {
+                println!("{:idt$}invalidate {}", "", r, idt=indent);
+            },
+            Statement::Skip => {
+                println!("{:idt$}skip", "", idt=indent);
+            },
+            Statement::Printf(e1, e2, s, args) => {
+                if args.is_empty() {
+                    println!("{:idt$}printf({}, {}, {})", "", 
+                            e1, e2, s, idt=indent);
+                } else {
+                    let arglist: String = args.iter()
+                        .map(|x| x.to_string() + ", ").collect::<String>();
+                    let argstr = arglist.trim_end_matches(", ");
+                    println!("{:idt$}printf({}, {}, {}, {})", "", 
+                            e1, e2, s, argstr, idt=indent);
+                }
+            },
+            Statement::Stop(e1, e2, val) => {
+                println!("{:idt$}stop({}, {}, {})", "", e1, e2, val, idt=indent);
+            },
+            Statement::Unimplemented(s) => {
+                println!("{:idt$}unimpl_{}()", "", s, idt=indent);
             }
-            if !eblk.is_empty() {
-                println!("{:idt$}else :", "", idt=indent);
-                for s in eblk {
-                    dump_indent_stmt(indent+2, s);
+            Statement::Mem(decl) => {
+                println!("{:idt$}mem {} :", "", decl.id, idt=indent);
+                println!("{:idt$}data-type => {}", "", decl.ty, idt=indent+2);
+                println!("{:idt$}depth => {}", "", decl.depth, idt=indent+2);
+                println!("{:idt$}read-latency => {}", "", 
+                    decl.read_latency, idt=indent+2
+                );
+                println!("{:idt$}write-latency => {}", "", 
+                    decl.write_latency, idt=indent+2
+                );
+                println!("{:idt$}read-under-write => {}", "", 
+                    decl.read_under_write, idt=indent+2
+                );
+                for rp in &decl.rp_list {
+                    println!("{:idt$}reader => {}", "", rp, idt=indent+2);
+                }
+                for wp in &decl.wp_list {
+                    println!("{:idt$}writer => {}", "", wp, idt=indent+2);
+                }
+                for rwp in &decl.rwp_list {
+                    println!("{:idt$}readwriter => {}", "", rwp, idt=indent+2);
                 }
             }
-        },
-
-        Statement::Connect(r, e) => {
-            println!("{:idt$}connect {}, {}", "", r, e, idt=indent);
-        },
-        Statement::PartialConnect(r, e) => {
-            println!("{:idt$}{} <- {}", "", r, e, idt=indent);
-        },
-        Statement::Invalidate(r) => {
-            println!("{:idt$}invalidate {}", "", r, idt=indent);
-        },
-        Statement::Skip => {
-            println!("{:idt$}skip", "", idt=indent);
-        },
-        Statement::Printf(e1, e2, s, args) => {
-            if args.is_empty() {
-                println!("{:idt$}printf({}, {}, {})", "", 
-                        e1, e2, s, idt=indent);
-            } else {
-                let arglist: String = args.iter()
-                    .map(|x| x.to_string() + ", ").collect::<String>();
-                let argstr = arglist.trim_end_matches(", ");
-                println!("{:idt$}printf({}, {}, {}, {})", "", 
-                        e1, e2, s, argstr, idt=indent);
-            }
-        },
-        Statement::Stop(e1, e2, val) => {
-            println!("{:idt$}stop({}, {}, {})", "", e1, e2, val, idt=indent);
-        },
-        Statement::Unimplemented(s) => {
-            println!("{:idt$}unimpl_{}()", "", s, idt=indent);
+            Statement::Attach(refs) => {
+                let reflist: String = refs.iter().map(|x| x.to_string() + ", ")
+                    .collect::<String>();
+                let s = reflist.trim_end_matches(", ");
+                println!("{:idt$}attach({})", "", s, idt=indent);
+            },
+            Statement::Define(sr, re) => {
+                println!("{:idt$}define {} = {}", "", sr, re, idt=indent);
+            },
+            Statement::ForceInitial(re, e) => {
+                println!("{:idt$}force_initial({}, {})", "", re, e, idt=indent);
+            },
+            Statement::Force(e1, e2, re, e3) => {
+                println!("{:idt$}force({}, {}, {}, {})", "", 
+                    e1, e2, re, e3, idt=indent);
+            },
+            Statement::Release(e1, e2, re) => {
+                println!("{:idt$}release({}, {}, {})", "", 
+                    e1, e2, re, idt=indent);
+            },
+            Statement::ReleaseInitial(re) => {
+                println!("{:idt$}release_initial({})", "", re, idt=indent);
+            },
+            _ => panic!("{:?}", statement),
         }
-        Statement::Mem(decl) => {
-            println!("{:idt$}mem {} :", "", decl.id, idt=indent);
-            println!("{:idt$}data-type => {}", "", decl.ty, idt=indent+2);
-            println!("{:idt$}depth => {}", "", decl.depth, idt=indent+2);
-            println!("{:idt$}read-latency => {}", "", 
-                decl.read_latency, idt=indent+2
-            );
-            println!("{:idt$}write-latency => {}", "", 
-                decl.write_latency, idt=indent+2
-            );
-            println!("{:idt$}read-under-write => {}", "", 
-                decl.read_under_write, idt=indent+2
-            );
-            for rp in &decl.rp_list {
-                println!("{:idt$}reader => {}", "", rp, idt=indent+2);
-            }
-            for wp in &decl.wp_list {
-                println!("{:idt$}writer => {}", "", wp, idt=indent+2);
-            }
-            for rwp in &decl.rwp_list {
-                println!("{:idt$}readwriter => {}", "", rwp, idt=indent+2);
-            }
-        }
-        Statement::Attach(refs) => {
-            let reflist: String = refs.iter().map(|x| x.to_string() + ", ")
-                .collect::<String>();
-            let s = reflist.trim_end_matches(", ");
-            println!("{:idt$}attach({})", "", s, idt=indent);
-        },
-        Statement::Define(sr, re) => {
-            println!("{:idt$}define {} = {}", "", sr, re, idt=indent);
-        },
-        Statement::ForceInitial(re, e) => {
-            println!("{:idt$}force_initial({}, {})", "", re, e, idt=indent);
-        },
-        Statement::Force(e1, e2, re, e3) => {
-            println!("{:idt$}force({}, {}, {}, {})", "", 
-                e1, e2, re, e3, idt=indent);
-        },
-        Statement::Release(e1, e2, re) => {
-            println!("{:idt$}release({}, {}, {})", "", 
-                e1, e2, re, idt=indent);
-        },
-        Statement::ReleaseInitial(re) => {
-            println!("{:idt$}release_initial({})", "", re, idt=indent);
-        },
-        _ => panic!("{:?}", statement),
     }
-}
 
-impl Circuit {
+    /// Write the FIRRTL for this [Circuit] to `stdout`.
     pub fn dump(&self) {
         println!("circuit {}:", self.id);
         for m in &self.modules {
@@ -154,19 +156,19 @@ impl Circuit {
                 println!("{:idt$}{}", "", port, idt=4);
             }
             for s in &m.statements {
-                dump_indent_stmt(4, s);
+                Self::dump_indent_stmt(4, s);
             }
         }
     }
 }
 
 
-
+/// FIRRTL module (`module`)
 #[derive(Debug)]
 pub struct Module {
-    id: String,
-    ports: Vec<PortDecl>,
-    statements: Vec<Statement>,
+    pub id: String,
+    pub ports: Vec<PortDecl>,
+    pub statements: Vec<Statement>,
 }
 impl Module {
     pub fn new(
@@ -179,10 +181,11 @@ impl Module {
     }
 }
 
+/// FIRRTL intrinsic module (`intmodule`)
 #[derive(Debug)]
 pub struct IntModule {
-    id: String,
-    ports: Vec<PortDecl>,
+    pub id: String,
+    pub ports: Vec<PortDecl>,
 }
 impl IntModule {
     pub fn new(id: impl ToString, ports: Vec<PortDecl>) -> Self {
@@ -194,10 +197,11 @@ impl IntModule {
 }
 
 
+/// FIRRTL external module (`extmodule`)
 #[derive(Debug)]
 pub struct ExtModule {
-    id: String,
-    ports: Vec<PortDecl>,
+    pub id: String,
+    pub ports: Vec<PortDecl>,
 }
 impl ExtModule {
     pub fn new(id: impl ToString, ports: Vec<PortDecl>) -> Self {
@@ -209,11 +213,12 @@ impl ExtModule {
 }
 
 
+/// FIRRTL module port declaration
 #[derive(Debug)]
 pub struct PortDecl {
-    id: String,
-    dir: Direction,
-    ty: FirrtlType,
+    pub id: String,
+    pub dir: Direction,
+    pub ty: FirrtlType,
 }
 impl PortDecl {
     pub fn new(id: impl ToString, dir: Direction, ty: FirrtlType) -> Self { 
@@ -226,6 +231,7 @@ impl fmt::Display for PortDecl {
     }
 }
 
+/// FIRRTL ground datatypes
 #[derive(Debug)]
 pub enum FirrtlTypeGround {
     Clock, Reset, AsyncReset, 
@@ -263,6 +269,7 @@ impl fmt::Display for FirrtlTypeRef {
     }
 }
 
+/// FIRRTL datatypes
 #[derive(Debug)]
 pub enum FirrtlType {
     Ground(FirrtlTypeGround),
@@ -292,9 +299,9 @@ impl fmt::Display for FirrtlType {
 
 #[derive(Debug)]
 pub struct BundleField {
-    flip: bool,
-    id: String,
-    ty: FirrtlType,
+    pub flip: bool,
+    pub id: String,
+    pub ty: FirrtlType,
 }
 impl BundleField {
     pub fn new(flip: bool, id: impl ToString, ty: FirrtlType) -> Self {
@@ -348,17 +355,18 @@ impl fmt::Display for StaticReference {
 }
 
 
+/// FIRRTL memory declaration (`mem` statement)
 #[derive(Debug)]
 pub struct MemDecl {
-    id: String,
-    ty: FirrtlType,
-    depth: usize,
-    write_latency: usize,
-    read_latency: usize,
-    rp_list: Vec<String>,
-    wp_list: Vec<String>,
-    rwp_list: Vec<String>,
-    read_under_write: ReadUnderWrite,
+    pub id: String,
+    pub ty: FirrtlType,
+    pub depth: usize,
+    pub write_latency: usize,
+    pub read_latency: usize,
+    pub rp_list: Vec<String>,
+    pub wp_list: Vec<String>,
+    pub rwp_list: Vec<String>,
+    pub read_under_write: ReadUnderWrite,
 }
 impl MemDecl {
     pub fn new(
@@ -387,7 +395,7 @@ impl MemDecl {
 }
 
 
-
+/// FIRRTL statements
 #[derive(Debug)]
 pub enum Statement {
     Wire(String, FirrtlType),
@@ -414,6 +422,7 @@ pub enum Statement {
     Unimplemented(String),
 }
 
+/// FIRRTL expressions
 #[derive(Debug)]
 pub enum Expr {
     Ref(Reference),
@@ -449,6 +458,7 @@ impl fmt::Display for Expr {
     }
 }
 
+/// FIRRTL reference expressions
 #[derive(Debug)]
 pub enum RefExpr {
     Static(StaticReference),
@@ -465,6 +475,7 @@ impl fmt::Display for RefExpr {
     }
 }
 
+/// FIRRTL numeric literals
 #[derive(Debug)]
 pub enum LiteralNumeric {
     UInt(usize), SInt(isize),
@@ -505,8 +516,7 @@ impl fmt::Display for ReadUnderWrite {
     }
 }
 
-
-
+/// FIRRTL port direction
 #[derive(Debug)]
 pub enum Direction { 
     Input, Output 
@@ -534,7 +544,9 @@ impl fmt::Display for Direction {
 
 
 
-// NOTE: 'dshlw' only occurs in SFC output?
+/// Primitive operations (2 expressions)
+///
+/// NOTE: 'dshlw' only occurs in SFC output?
 #[derive(Debug)]
 pub enum PrimOp2Expr {
     Add, Sub, Mul, Div, Mod,
@@ -596,6 +608,7 @@ impl fmt::Display for PrimOp2Expr {
 }
 
 
+/// Primitive operations (1 expression)
 #[derive(Debug)]
 pub enum PrimOp1Expr {
     AsUInt, AsSInt, AsClock, AsAsyncReset, Cvt,
@@ -640,6 +653,7 @@ impl fmt::Display for PrimOp1Expr {
 }
 
 
+/// Primitive operations (1 expression, 1 integer literal)
 #[derive(Debug)]
 pub enum PrimOp1Expr1Int {
     Pad, Shl, Shr, Head, Tail
@@ -672,7 +686,7 @@ impl fmt::Display for PrimOp1Expr1Int {
 }
 
 
-
+/// Primitive operations (1 expression, 2 integer literals)
 #[derive(Debug)]
 pub enum PrimOp1Expr2Int {
     Bits

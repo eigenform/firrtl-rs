@@ -5,7 +5,7 @@ use crate::parse::FirrtlParser;
 
 impl <'a> FirrtlParser {
     pub fn parse_statements_block(stream: &mut FirrtlStream<'a>)
-        -> Result<Vec<Statement>, FirrtlStreamErr>
+        -> Result<Vec<Statement>, FirrtlParseError>
     {
         let mut statements = Vec::new();
         let body_indent_level = stream.indent_level();
@@ -31,7 +31,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_statement(stream: &mut FirrtlStream<'a>)
-        -> Result<Statement, FirrtlStreamErr>
+        -> Result<Statement, FirrtlParseError>
     {
         // We have to check for statements that begin with a 'reference'
         // first. Otherwise, this is a "simple" statement where we can 
@@ -174,7 +174,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_mem_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<MemDecl, FirrtlStreamErr>
+        -> Result<MemDecl, FirrtlParseError>
     {
         let stmt_blk_level = stream.indent_level();
         stream.match_identkw("mem")?;
@@ -350,7 +350,7 @@ impl <'a> FirrtlParser {
 
     pub fn parse_reg_stmt(stream: &mut FirrtlStream<'a>)
         -> Result<(String, FirrtlType, Expr, Option<(Expr, Expr)>), 
-                    FirrtlStreamErr>
+                    FirrtlParseError>
     {
         stream.match_identkw("reg")?;
         stream.next_token();
@@ -395,7 +395,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_inst_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(String, String), FirrtlStreamErr>
+        -> Result<(String, String), FirrtlParseError>
     {
         // FIXME: legalize module identifiers
         stream.match_identkw("inst")?;
@@ -412,7 +412,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_define_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(StaticReference, RefExpr), FirrtlStreamErr>
+        -> Result<(StaticReference, RefExpr), FirrtlParseError>
     {
         stream.match_identkw("define")?;
         stream.next_token();
@@ -424,7 +424,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_attach_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<Vec<Reference>, FirrtlStreamErr>
+        -> Result<Vec<Reference>, FirrtlParseError>
     {
         stream.match_identkw("attach")?;
         stream.next_token();
@@ -442,7 +442,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_force_initial_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(RefExpr, Expr), FirrtlStreamErr>
+        -> Result<(RefExpr, Expr), FirrtlParseError>
     {
         stream.match_identkw("force_initial")?;
         stream.next_token();
@@ -457,7 +457,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_release_initial_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<RefExpr, FirrtlStreamErr>
+        -> Result<RefExpr, FirrtlParseError>
     {
         stream.match_identkw("release_initial")?;
         stream.next_token();
@@ -470,7 +470,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_force_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(Expr, Expr, RefExpr, Expr), FirrtlStreamErr>
+        -> Result<(Expr, Expr, RefExpr, Expr), FirrtlParseError>
     {
         stream.match_identkw("force")?;
         stream.next_token();
@@ -487,7 +487,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_release_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(Expr, Expr, RefExpr), FirrtlStreamErr>
+        -> Result<(Expr, Expr, RefExpr), FirrtlParseError>
     {
         stream.match_identkw("release")?;
         stream.next_token();
@@ -503,7 +503,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_connect_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(Reference, Expr), FirrtlStreamErr>
+        -> Result<(Reference, Expr), FirrtlParseError>
     {
         stream.match_identkw("connect")?;
         stream.next_token();
@@ -512,7 +512,7 @@ impl <'a> FirrtlParser {
         Ok((reference, expr))
     }
     pub fn parse_invalidate_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<Reference, FirrtlStreamErr>
+        -> Result<Reference, FirrtlParseError>
     {
         stream.match_identkw("invalidate")?;
         stream.next_token();
@@ -521,7 +521,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_printf_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(Expr, Expr, String, Vec<Expr>), FirrtlStreamErr>
+        -> Result<(Expr, Expr, String, Vec<Expr>), FirrtlParseError>
     {
         stream.match_identkw("printf")?;
         stream.next_token();
@@ -553,7 +553,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_stop_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(Expr, Expr, usize), FirrtlStreamErr>
+        -> Result<(Expr, Expr, usize), FirrtlParseError>
     {
         stream.match_identkw("stop")?;
         stream.next_token();
@@ -576,7 +576,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_reference_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<Statement, FirrtlStreamErr>
+        -> Result<Statement, FirrtlParseError>
     {
         //println!("parsing reference stmt @ {:?}", stream.remaining_tokens());
         let reference = FirrtlParser::parse_reference(stream)?;
@@ -604,7 +604,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_wire_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(String, FirrtlType), FirrtlStreamErr>
+        -> Result<(String, FirrtlType), FirrtlParseError>
     {
         stream.match_identkw("wire")?;
         stream.next_token();
@@ -618,7 +618,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_node_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(String, Expr), FirrtlStreamErr>
+        -> Result<(String, Expr), FirrtlParseError>
     {
         stream.match_identkw("node")?;
         stream.next_token();
@@ -633,7 +633,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_when_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(Expr, Vec<Statement>, Vec<Statement>), FirrtlStreamErr>
+        -> Result<(Expr, Vec<Statement>, Vec<Statement>), FirrtlParseError>
     {
         let current_indent = stream.indent_level();
 

@@ -1,39 +1,17 @@
+//! Interface for recovering an AST from FIRRTL input. 
+//!
+//!
 
 use crate::lex;
 use crate::token;
+use crate::parse;
+use crate::ast;
 
-/// A suitably-trimmed "line" (without comments).
-///
-/// NOTE: This is only used during tokenization.
-#[derive(Debug)]
-pub struct FirrtlLine {
-    /// The line number in the original source file
-    line_number: usize,
-    /// Index of the first relevant character in the original source file
-    line_start: usize,
-    /// Contents (hopefully meaningful tokens)
-    line: String,
-}
-impl FirrtlLine {
-    pub fn indent_level(&self) -> usize {
-        self.line_start - 1
-    }
-    pub fn line_number(&self) -> usize {
-        self.line_number
-    }
-    pub fn line_start(&self) -> usize {
-        self.line_start
-    }
-    pub fn contents(&self) -> &str {
-        &self.line
-    }
-}
-
-/// Representing input from a FIRRTL (.fir) source file.
+/// Container for input from a FIRRTL (.fir) source file.
 pub struct FirrtlFile {
     /// Source filename
     pub filename: String,
-    /// Original file contents
+    /// Original file contents (for error-handling).
     pub raw_contents: String,
     /// Set of tokenized, "effective" lines
     pub lines: Vec<lex::FirrtlTokenizedLine>,
@@ -80,7 +58,7 @@ impl FirrtlFile {
     }
 
     /// Tokenize a set of [FirrtlLine] into a list of [FirrtlTokenizedLine].
-    pub fn tokenize_lines(lines: &[FirrtlLine]) 
+    fn tokenize_lines(lines: &[FirrtlLine]) 
         -> Vec<lex::FirrtlTokenizedLine> 
     {
         use logos::Logos;
@@ -130,17 +108,69 @@ impl FirrtlFile {
         }
         tokenized_lines
     }
+}
 
-    pub fn new(filename: &str, contents: &str) -> Self {
+/// This is the public interface to a [FirrtlFile]. 
+impl FirrtlFile {
+    /// Import FIRRTL from some file
+    pub fn from_file(filename: &str) -> Self { 
+        use std::fs::File;
+        use std::io::Read;
+        let mut f = File::open(filename).unwrap();
+        let mut s = String::new();
+        f.read_to_string(&mut s).unwrap();
+        Self::from_str(filename, &s)
+    }
+
+    /// Import FIRRTL from a string. 
+    pub fn from_str(filename: &str, contents: &str) -> Self {
         // Preprocess into a set of [FirrtlLine]
         let raw_lines = Self::read_lines(contents);
+
         // Produce a set of [FirrtlTokenizedLine]
         let lines = Self::tokenize_lines(&raw_lines);
+
         Self { 
             raw_contents: contents.to_string(),
             filename: filename.to_string(),
             lines
         }
+    }
+
+    /// Convert this [FirrtlFile] into the corresponding [Circuit].
+    pub fn parse(&self) -> Result<ast::Circuit, lex::FirrtlParseError> {
+        let mut stream = lex::FirrtlStream::new(&self);
+        let circuit = parse::FirrtlParser::parse(&mut stream)?;
+        Ok(circuit)
+    }
+
+
+}
+
+/// A suitably-trimmed "line" (without comments).
+///
+/// NOTE: This is not exposed to library users. 
+#[derive(Debug)]
+struct FirrtlLine {
+    /// The line number in the original source file
+    line_number: usize,
+    /// Index of the first relevant character in the original source file
+    line_start: usize,
+    /// Contents (hopefully meaningful tokens)
+    line: String,
+}
+impl FirrtlLine {
+    pub fn indent_level(&self) -> usize {
+        self.line_start - 1
+    }
+    pub fn line_number(&self) -> usize {
+        self.line_number
+    }
+    pub fn line_start(&self) -> usize {
+        self.line_start
+    }
+    pub fn contents(&self) -> &str {
+        &self.line
     }
 }
 

@@ -5,7 +5,7 @@ use crate::parse::FirrtlParser;
 
 impl <'a> FirrtlParser {
     pub fn parse_optional_typewidth(stream: &mut FirrtlStream<'a>)
-        -> Result<Option<usize>, FirrtlStreamErr>
+        -> Result<Option<usize>, FirrtlParseError>
     {
         let width = if stream.match_punc("<").is_ok() {
             stream.next_token();
@@ -21,7 +21,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_bundle_field(stream: &mut FirrtlStream<'a>) 
-        -> Result<BundleField, FirrtlStreamErr>
+        -> Result<BundleField, FirrtlParseError>
     {
         //println!("{:?}", stream.remaining_tokens());
         let flip = if stream.match_identkw("flip").is_ok() {
@@ -48,7 +48,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_bundle(stream: &mut FirrtlStream<'a>) 
-        -> Result<FirrtlType, FirrtlStreamErr>
+        -> Result<FirrtlType, FirrtlParseError>
     {
         stream.match_punc("{")?;
         stream.next_token();
@@ -69,13 +69,9 @@ impl <'a> FirrtlParser {
         Ok(FirrtlType::Bundle(fields))
     }
 
-
-
-
     pub fn parse_type(stream: &mut FirrtlStream<'a>) 
-        -> Result<FirrtlType, FirrtlStreamErr>
+        -> Result<FirrtlType, FirrtlParseError>
     {
-
         // Probe/RWProbe
         if stream.match_identkw("Probe").is_ok() {
             stream.next_token();

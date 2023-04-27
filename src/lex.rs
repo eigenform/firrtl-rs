@@ -1,3 +1,4 @@
+//! FIRRTL lexing/tokenization
 
 use std::ops::Range;
 use std::collections::BTreeSet;
@@ -5,6 +6,7 @@ use logos::Logos;
 
 use crate::file::*;
 use crate::token::*;
+
 
 /// A fully-tokenized FIRRTL line, corresponding to a single [FirrtlLine] 
 /// contained in a [FirrtlFile]. 
@@ -48,19 +50,22 @@ impl FirrtlTokenizedLine {
     }
 }
 
-
-/// FIRRTL parse error.
+/// FIRRTL parser error code.
 #[derive(Debug)]
-pub enum FirrtlStreamErr {
+pub enum ParseErrorKind {
     ExpectedToken(String),
     ExpectedKeyword(String),
     ExpectedPunctuation(String),
-    Other(&'static str),
+    Other(String),
 }
 
+/// FIRRTL parser error.
+#[derive(Debug)]
 pub struct FirrtlParseError {
-}
-pub struct FirrtlParseWarning {
+    /// The type of error
+    pub kind: ParseErrorKind,
+    /// The span/context for this error
+    pub span: Range<usize>,
 }
 
 /// State used to implement a parser over some set of [FirrtlTokenizedLine].
@@ -171,97 +176,112 @@ impl <'a> FirrtlStream<'a> {
         self.line().sf_line
     }
 
-    fn get_source_span(&self) -> miette::SourceSpan {
+    fn get_source_span(&self) -> Range<usize> {
         let s = self.line().spans[self.lcur].start;
         let e = self.line().spans[self.lcur].end;
-        miette::SourceSpan::new(s.into(), e.into())
+        s..e
     }
 
-    fn build_parse_error(&self) {
-        use miette::{ SourceSpan, NamedSource };
-        let span = self.get_source_span();
-        let content = self.file.raw_contents.clone();
-        let src  = NamedSource::new(&self.file.filename, content);
+    fn err_keyword(&self, kw: &str) -> FirrtlParseError {
+        FirrtlParseError {
+            kind: ParseErrorKind::ExpectedKeyword(kw.to_string()),
+            span: self.get_source_span(),
+        }
+    }
+    fn err_punct(&self, kw: &str) -> FirrtlParseError {
+        FirrtlParseError {
+            kind: ParseErrorKind::ExpectedPunctuation(kw.to_string()),
+            span: self.get_source_span(),
+        }
+    }
+    fn err_token(&self, kw: &str) -> FirrtlParseError {
+        FirrtlParseError {
+            kind: ParseErrorKind::ExpectedToken(kw.to_string()),
+            span: self.get_source_span(),
+        }
+    }
+    fn err_other(&self, kw: &str) -> FirrtlParseError {
+        FirrtlParseError {
+            kind: ParseErrorKind::Other(kw.to_string()),
+            span: self.get_source_span(),
+        }
     }
 }
 
 /// All of these methods attempt to *match* the underlying data from a [Token]. 
 impl <'a> FirrtlStream<'a> {
-    pub fn match_punc(&self, p: &'a str) -> Result<(), FirrtlStreamErr> {
+    pub fn match_punc(&self, p: &'a str) -> Result<(), FirrtlParseError> {
         if self.token() == &Token::punctuation_from_str(p) {
             Ok(())
         } else { 
-            Err(FirrtlStreamErr::ExpectedPunctuation(p.to_string()))
+            Err(self.err_punct(p))
         }
     }
 
-    pub fn match_identkw(&self, kw: &'a str) -> Result<(), FirrtlStreamErr> {
+    pub fn match_identkw(&self, kw: &'a str) -> Result<(), FirrtlParseError> {
         let idkw = self.get_identkw()?;
         if idkw == kw {
             Ok(())
         } else { 
-            Err(FirrtlStreamErr::ExpectedKeyword(kw.to_string()))
+            Err(self.err_keyword(kw))
         }
     }
 
     /// Return the first matching keyword
     pub fn match_identkw_multi(&self, kw: &[&'a str]) 
-        -> Result<&'a str, FirrtlStreamErr>
+        -> Result<&'a str, FirrtlParseError>
     {
         let idkw = self.get_identkw()?;
         if let Some(m) = kw.iter().find(|k| *k == &idkw) {
             Ok(m)
         } else {
-            let estr = format!("{:?}", kw);
-            Err(FirrtlStreamErr::ExpectedKeyword(estr))
+            Err(self.err_keyword(&format!("{:?}", kw)))
         }
     }
 }
 
 /// All of these methods attempt to *read* the underlying data from a [Token]. 
 impl <'a> FirrtlStream<'a> {
-    pub fn get_identkw(&self) -> Result<&'a str, FirrtlStreamErr> {
+    pub fn get_identkw(&self) -> Result<&'a str, FirrtlParseError> {
         if let Token::IdentKw(s) = self.token() {
             Ok(s)
         } else { 
-            let e = format!("expected Token::IdentKw, got {:?}",
-                            self.token());
-            Err(FirrtlStreamErr::ExpectedToken(e))
+            Err(self.err_token("identifier/keyword"))
         }
     }
-    pub fn get_lit_int(&self) -> Result<&'a str, FirrtlStreamErr> {
+    pub fn get_lit_int(&self) -> Result<&'a str, FirrtlParseError> {
         if let Some(lit) = self.token().get_lit_int() {
             Ok(lit)
         } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected lit int".to_string()))
+            Err(self.err_token("integer literal"))
         }
     }
-    pub fn get_lit_sint(&self) -> Result<&'a str, FirrtlStreamErr> {
+    pub fn get_lit_sint(&self) -> Result<&'a str, FirrtlParseError> {
         if let Some(lit) = self.token().get_lit_sint() {
             Ok(lit)
         } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected lit sint".to_string()))
+            Err(self.err_token("signed integer literal"))
         }
     }
-    pub fn get_lit_float(&self) -> Result<&'a str, FirrtlStreamErr> {
+    pub fn get_lit_float(&self) -> Result<&'a str, FirrtlParseError> {
         if let Some(lit) = self.token().get_lit_float() {
             Ok(lit)
         } else { 
-            Err(FirrtlStreamErr::ExpectedToken("expected lit flt".to_string()))
+            Err(self.err_token("floating-point literal"))
         }
     }
-    pub fn get_lit_str(&self) -> Result<&'a str, FirrtlStreamErr> {
+    pub fn get_lit_str(&self) -> Result<&'a str, FirrtlParseError> {
         if let Some(lit) = self.token().get_lit_str() {
             Ok(lit)
         } else {
-            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
+            Err(self.err_token("string literal"))
         }
     }
-    pub fn get_lit_raw_str(&self) -> Result<&'a str, FirrtlStreamErr> {
+    pub fn get_lit_raw_str(&self) -> Result<&'a str, FirrtlParseError> {
         if let Some(lit) = self.token().get_raw_str() {
             Ok(lit)
         } else {
-            Err(FirrtlStreamErr::ExpectedToken("expected lit str".to_string()))
+            Err(self.err_token("raw string literal"))
         }
     }
 }

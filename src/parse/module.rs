@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 impl <'a> FirrtlParser {
     pub fn parse_module(stream: &mut FirrtlStream<'a>) 
-        -> Result<Module, FirrtlStreamErr> 
+        -> Result<Module, FirrtlParseError> 
     {
         stream.match_identkw("module")?;
         stream.next_token();
@@ -34,7 +34,7 @@ impl <'a> FirrtlParser {
 
 
     pub fn parse_intmodule(stream: &mut FirrtlStream<'a>) 
-        -> Result<IntModule, FirrtlStreamErr> 
+        -> Result<IntModule, FirrtlParseError> 
     {
         stream.match_identkw("intmodule")?;
         stream.next_token();
@@ -67,7 +67,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_extmodule(stream: &mut FirrtlStream<'a>) 
-        -> Result<ExtModule, FirrtlStreamErr> 
+        -> Result<ExtModule, FirrtlParseError> 
     {
         stream.match_identkw("extmodule")?;
         stream.next_token();
@@ -105,7 +105,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_defname(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr> 
+        -> Result<(), FirrtlParseError> 
     {
         stream.match_identkw("defname")?;
         stream.next_token();
@@ -118,7 +118,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_parameter(stream: &mut FirrtlStream<'a>) 
-        -> Result<(), FirrtlStreamErr> 
+        -> Result<(), FirrtlParseError> 
     {
         stream.match_identkw("parameter")?;
         stream.next_token();
@@ -153,13 +153,13 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_port(stream: &mut FirrtlStream<'a>)
-        -> Result<PortDecl, FirrtlStreamErr>
+        -> Result<PortDecl, FirrtlParseError>
     {
         let dir = match stream.get_identkw()? {
             "input"  => Direction::Input,
             "output" => Direction::Output,
             _ => { 
-                return Err(FirrtlStreamErr::Other("invalid port direction"));
+                panic!("invalid port direction?");
             },
         };
         stream.next_token();
@@ -185,7 +185,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_portlist(stream: &mut FirrtlStream<'a>)
-        -> Result<Vec<PortDecl>, FirrtlStreamErr>
+        -> Result<Vec<PortDecl>, FirrtlParseError>
     {
         let mut portlist = Vec::new();
         let body_indent_level = stream.indent_level();

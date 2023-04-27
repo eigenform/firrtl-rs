@@ -1,3 +1,4 @@
+/// FIRRTL parser implementation.
 
 use crate::lex::*;
 use crate::ast::*;
@@ -11,7 +12,7 @@ pub mod datatype;
 pub struct FirrtlParser;
 impl <'a> FirrtlParser {
     pub fn parse_firrtl_version(stream: &mut FirrtlStream<'a>)
-        -> Result<(), FirrtlStreamErr>
+        -> Result<(), FirrtlParseError>
     {
         assert!(stream.indent_level() == 0);
         stream.match_identkw("FIRRTL")?;
@@ -23,7 +24,7 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_circuit(stream: &mut FirrtlStream<'a>)
-        -> Result<Circuit, FirrtlStreamErr>
+        -> Result<Circuit, FirrtlParseError>
     {
         assert!(stream.indent_level() == 0);
         stream.match_identkw("circuit")?;
@@ -65,7 +66,7 @@ impl <'a> FirrtlParser {
                     circuit.add_intmodule(m);
                 },
                 _ => {
-                    return Err(FirrtlStreamErr::Other("bad module keyword?"));
+                    panic!("bad module keyword?");
                 }
             }
         }
@@ -75,9 +76,11 @@ impl <'a> FirrtlParser {
 
     /// Convert a [FirrtlStream] into an AST
     pub fn parse(stream: &mut FirrtlStream<'a>) 
-        -> Result<Circuit, FirrtlStreamErr> 
+        -> Result<Circuit, FirrtlParseError> 
     {
+        // This is *optional* for now, I guess
         if let Ok(v) = FirrtlParser::parse_firrtl_version(stream) {
+        } else { 
         }
 
         let circuit = FirrtlParser::parse_circuit(stream)?;

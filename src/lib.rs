@@ -1,9 +1,11 @@
+//! A library for parsing FIRRTL.
+
 #![allow(unused_parens)]
 
-mod file;
 mod token;
 mod lex;
 mod parse;
+pub mod file;
 pub mod ast;
 
 #[cfg(test)]
@@ -13,21 +15,17 @@ mod tests {
     use crate::parse::*;
 
     #[test]
-    fn circt_parse_basic() -> Result<(), FirrtlStreamErr> {
+    fn circt_parse_basic() -> Result<(), FirrtlParseError> {
         use std::fs::File;
         use std::io::*;
 
-        let filename = "./parse-basic.fir";
-        //let filename = "./chisel-tests/firrtl/GCD.fir";
-        let mut f = File::open(filename).unwrap();
-        let mut s = String::new();
-        f.read_to_string(&mut s).unwrap();
+        //let filename = "./parse-basic.fir";
+        let filename = "./chisel-tests/firrtl/GCD.fir";
+        let sf = FirrtlFile::from_file(filename);
+        let circuit = sf.parse()?;
 
-        // Load a new [FirrtlFile]
-        let sf = FirrtlFile::new(filename, &s);
-
-        let mut stream = FirrtlStream::new(&sf);
-        let circuit = FirrtlParser::parse(&mut stream)?;
+        //let mut stream = FirrtlStream::new(&sf);
+        //let circuit = FirrtlParser::parse(&mut stream)?;
         circuit.dump();
         Ok(())
     }
