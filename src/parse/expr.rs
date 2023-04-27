@@ -327,7 +327,7 @@ impl <'a> FirrtlParser {
             let index_expr = FirrtlParser::parse_expr(stream)?;
             stream.match_punc("]")?;
             stream.next_token();
-            Ok(Reference::DynamicIndex(static_ref))
+            Ok(Reference::DynamicIndex(static_ref, Box::new(index_expr)))
         } else {
             Ok(Reference::Static(static_ref))
         }

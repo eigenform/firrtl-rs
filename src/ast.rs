@@ -30,8 +30,16 @@ impl Circuit {
 
 pub fn dump_indent_stmt(indent: usize, statement: &Statement) {
     match statement {
-        Statement::Reg(id, ty) => {
-            println!("{:idt$}reg {}: {}", "", id, ty, idt=indent);
+        Statement::Reg(id, ty, clkexpr, rvexpr) => {
+            if let Some((reset_expr, val_expr)) = rvexpr { 
+                println!("{:idt$}reg {}: {}, {} with:", "", 
+                         id, ty, clkexpr, idt=indent);
+                println!("{:idt$}(reset => ({}, {}))", "", 
+                         reset_expr, val_expr, idt=indent+2);
+            } else { 
+                println!("{:idt$}reg {}: {}, {}", "", 
+                         id, ty, clkexpr, idt=indent);
+            }
         },
         Statement::Wire(id, ty) => {
             println!("{:idt$}wire {}: {}", "", id, ty, idt=indent);
@@ -307,13 +315,13 @@ impl fmt::Display for BundleField {
 #[derive(Debug)]
 pub enum Reference {
     Static(StaticReference),
-    DynamicIndex(StaticReference),
+    DynamicIndex(StaticReference, Box<Expr>),
 }
 impl fmt::Display for Reference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self { 
             Self::Static(r) => write!(f, "{}", r),
-            Self::DynamicIndex(r) => write!(f, "{}[expr..]", r),
+            Self::DynamicIndex(r, expr) => write!(f, "{}[{}]", r, expr),
         }
     }
 }
@@ -383,7 +391,7 @@ impl MemDecl {
 #[derive(Debug)]
 pub enum Statement {
     Wire(String, FirrtlType),
-    Reg(String, FirrtlType),
+    Reg(String, FirrtlType, Expr, Option<(Expr, Expr)>),
     Inst(String, String),
     Mem(MemDecl),
     Node(String, Expr),

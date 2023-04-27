@@ -50,8 +50,9 @@ impl <'a> FirrtlParser {
                 return Ok(Statement::Wire(id, ty));
             },
             "reg" => {
-                let (id, ty) = FirrtlParser::parse_reg_stmt(stream)?;
-                return Ok(Statement::Reg(id, ty));
+                let (id, ty, clkexpr, rvexpr) = 
+                    FirrtlParser::parse_reg_stmt(stream)?;
+                return Ok(Statement::Reg(id, ty, clkexpr, rvexpr));
             },
             "mem" => {
                 let mem_decl = FirrtlParser::parse_mem_stmt(stream)?;
@@ -348,7 +349,8 @@ impl <'a> FirrtlParser {
     }
 
     pub fn parse_reg_stmt(stream: &mut FirrtlStream<'a>)
-        -> Result<(String, FirrtlType), FirrtlStreamErr>
+        -> Result<(String, FirrtlType, Expr, Option<(Expr, Expr)>), 
+                    FirrtlStreamErr>
     {
         stream.match_identkw("reg")?;
         stream.next_token();
@@ -361,6 +363,7 @@ impl <'a> FirrtlParser {
         let ty = FirrtlParser::parse_type(stream)?;
         let clk_expr = FirrtlParser::parse_expr(stream)?;
 
+        let mut reset_val_expr = None;
         if stream.match_identkw("with").is_ok() {
             stream.next_token();
             stream.match_punc(":")?;
@@ -377,8 +380,9 @@ impl <'a> FirrtlParser {
             stream.next_token();
             stream.match_punc("(")?;
             stream.next_token();
-            let e1 = FirrtlParser::parse_expr(stream)?;
-            let e2 = FirrtlParser::parse_expr(stream)?;
+            let reset_expr = FirrtlParser::parse_expr(stream)?;
+            let val_expr = FirrtlParser::parse_expr(stream)?;
+            reset_val_expr = Some((reset_expr, val_expr));
             stream.match_punc(")")?;
             stream.next_token();
 
@@ -387,7 +391,7 @@ impl <'a> FirrtlParser {
                 stream.next_token();
             }
         }
-        Ok((id.to_string(), ty))
+        Ok((id.to_string(), ty, clk_expr, reset_val_expr))
     }
 
     pub fn parse_inst_stmt(stream: &mut FirrtlStream<'a>)

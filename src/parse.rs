@@ -77,7 +77,9 @@ impl <'a> FirrtlParser {
     pub fn parse(stream: &mut FirrtlStream<'a>) 
         -> Result<Circuit, FirrtlStreamErr> 
     {
-        FirrtlParser::parse_firrtl_version(stream)?;
+        if let Ok(v) = FirrtlParser::parse_firrtl_version(stream) {
+        }
+
         let circuit = FirrtlParser::parse_circuit(stream)?;
         Ok(circuit)
     }

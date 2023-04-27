@@ -18,6 +18,7 @@ mod tests {
         use std::io::*;
 
         let filename = "./parse-basic.fir";
+        //let filename = "./chisel-tests/firrtl/GCD.fir";
         let mut f = File::open(filename).unwrap();
         let mut s = String::new();
         f.read_to_string(&mut s).unwrap();
