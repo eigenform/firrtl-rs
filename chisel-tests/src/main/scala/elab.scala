@@ -1,9 +1,23 @@
 package ft
 
 import chisel3._
+import circt.stage.ChiselStage
 
-// FIXME: Uhhh is this actually emitting what I want? 
+// This generates the *MLIR FIRRTL* output (.fir.mlir)
 object FirrtlEmitter {
+  def apply(gen: => RawModule) = {
+    (new circt.stage.ChiselStage).execute(
+      Array("--target-dir", "firrtl"),
+      Seq(
+        chisel3.stage.ChiselGeneratorAnnotation(() => gen),
+        //circt.stage.CIRCTTargetAnnotation(circt.stage.CIRCTTarget.CHIRRTL),
+        circt.stage.CIRCTTargetAnnotation(circt.stage.CIRCTTarget.FIRRTL),
+      ),
+    )
+  }
+}
+
+object ChirrtlEmitter {
   def apply(gen: => RawModule) = {
     (new circt.stage.ChiselStage).execute(
       Array("--target-dir", "firrtl"),
@@ -13,6 +27,7 @@ object FirrtlEmitter {
       ),
     )
   }
+
 }
 
 
@@ -54,6 +69,7 @@ class MyNestedModule extends Module {
 
 object Elaborate extends App {
   FirrtlEmitter(new ft.alu.MyAlu)
+  ChirrtlEmitter(new ft.alu.MyAlu)
   FirrtlEmitter(new ft.alu.GCD)
   FirrtlEmitter(new MyNestedModule)
 }

@@ -19,14 +19,26 @@ impl Circuit {
             extmodules: Vec::new(),
         }
     }
+
+    /// Add a module to this circuit.
     pub fn add_module(&mut self, m: Module) {
         self.modules.push(m);
     }
+
+    /// Add an intrinsic module to this circuit.
     pub fn add_intmodule(&mut self, m: IntModule) {
         self.intmodules.push(m);
     }
+
+    /// Add an external module to this circuit.
     pub fn add_extmodule(&mut self, m: ExtModule) {
         self.extmodules.push(m);
+    }
+
+    /// Get a reference to the top module in this circuit.
+    pub fn top_module(&self) -> Option<&Module> {
+        /// NOTE: This should always correspond to the name of the circuit. 
+        self.modules.iter().find(|m| m.id == self.id)
     }
 
     /// Print a FIRRTL statement with some indentation level
@@ -171,11 +183,8 @@ pub struct Module {
     pub statements: Vec<Statement>,
 }
 impl Module {
-    pub fn new(
-        id: impl ToString, 
-        ports: Vec<PortDecl>, 
-        statements: Vec<Statement>
-    ) -> Self 
+    pub fn new(id: impl ToString, ports: Vec<PortDecl>, 
+               statements: Vec<Statement>) -> Self 
     {
         Self { id: id.to_string(), ports, statements }
     }
@@ -189,10 +198,7 @@ pub struct IntModule {
 }
 impl IntModule {
     pub fn new(id: impl ToString, ports: Vec<PortDecl>) -> Self {
-        Self {
-            id: id.to_string(),
-            ports
-        }
+        Self { id: id.to_string(), ports }
     }
 }
 
@@ -205,10 +211,7 @@ pub struct ExtModule {
 }
 impl ExtModule {
     pub fn new(id: impl ToString, ports: Vec<PortDecl>) -> Self {
-        Self {
-            id: id.to_string(),
-            ports,
-        }
+        Self { id: id.to_string(), ports, }
     }
 }
 
@@ -232,10 +235,14 @@ impl fmt::Display for PortDecl {
 }
 
 /// FIRRTL ground datatypes
-#[derive(Debug)]
+///
+/// NOTE: Unspecified widths are *inferred* widths. 
+#[derive(Debug, Clone)]
 pub enum FirrtlTypeGround {
     Clock, Reset, AsyncReset, 
-    UInt(Option<usize>), SInt(Option<usize>), Analog(Option<usize>),
+    UInt(Option<usize>), 
+    SInt(Option<usize>), 
+    Analog(Option<usize>),
 }
 impl fmt::Display for FirrtlTypeGround {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -255,7 +262,7 @@ impl fmt::Display for FirrtlTypeGround {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FirrtlTypeRef {
     Probe(Box<FirrtlType>),
     RWProbe(Box<FirrtlType>),
@@ -270,13 +277,58 @@ impl fmt::Display for FirrtlTypeRef {
 }
 
 /// FIRRTL datatypes
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FirrtlType {
     Ground(FirrtlTypeGround),
     Vector(Box<Self>, usize),
     Bundle(Vec<BundleField>),
     Ref(FirrtlTypeRef),
     None,
+}
+impl FirrtlType {
+    pub fn bundle_field_type(&self, field_name: &str) 
+        -> Option<&FirrtlType>
+    {
+        if let Self::Bundle(fields) = self {
+            if let Some(field) = fields.iter().find(|f| f.id == field_name) {
+                Some(&field.ty)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get the bitwidth of this type. `None` indicates an inferred width.
+    pub fn width(&self) -> Option<usize> {
+        match self { 
+            Self::Ground(g) => match g {
+                FirrtlTypeGround::Clock => Some(1),
+                FirrtlTypeGround::Reset => Some(1),
+                FirrtlTypeGround::AsyncReset => Some(1),
+                FirrtlTypeGround::UInt(s) => s.clone(),
+                FirrtlTypeGround::SInt(s) => s.clone(),
+                FirrtlTypeGround::Analog(s) => s.clone(),
+            },
+            Self::Vector(ty, sz) => {
+                if let Some(w) = ty.width() { Some(w * sz) } else { None }
+            },
+
+            // FIXME: You're assuming that all fields have definite width
+            Self::Bundle(fields) => {
+                let w = fields.iter().fold(0, |mut res, f| { 
+                    res += f.width(); res
+                });
+                Some(w)
+            },
+            Self::Ref(r) => match r {
+                FirrtlTypeRef::Probe(ty) |
+                FirrtlTypeRef::RWProbe(ty) => ty.width(),
+            },
+            Self::None => None,
+        }
+    }
 }
 impl fmt::Display for FirrtlType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -297,7 +349,7 @@ impl fmt::Display for FirrtlType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BundleField {
     pub flip: bool,
     pub id: String,
@@ -306,6 +358,11 @@ pub struct BundleField {
 impl BundleField {
     pub fn new(flip: bool, id: impl ToString, ty: FirrtlType) -> Self {
         Self { flip, id: id.to_string(), ty }
+    }
+
+    // FIXME: You're *assuming* all fields have a width/are uninferred?
+    pub fn width(&self) -> usize { 
+        self.ty.width().unwrap()
     }
 }
 impl fmt::Display for BundleField {
@@ -323,6 +380,17 @@ impl fmt::Display for BundleField {
 pub enum Reference {
     Static(StaticReference),
     DynamicIndex(StaticReference, Box<Expr>),
+}
+impl Reference { 
+    /// Get the identifier at the base of this reference
+    pub fn get_ident(&self) -> &str {
+        match self { 
+            Self::Static(sr) | Self::DynamicIndex(sr, _) => {
+                sr.get_ident()
+            },
+        }
+    }
+
 }
 impl fmt::Display for Reference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -342,6 +410,14 @@ pub enum StaticReference {
 impl StaticReference {
     pub fn new_static(s: impl ToString) -> Self {
         Self::Static(s.to_string())
+    }
+    /// Get the identifier at the base of this static reference
+    pub fn get_ident(&self) -> &str {
+        match self {
+            Self::Static(s) => s,
+            Self::Subfield(s, _) => Self::get_ident(s),
+            Self::Subindex(s, _) => Self::get_ident(s),
+        }
     }
 }
 impl fmt::Display for StaticReference {
@@ -517,7 +593,7 @@ impl fmt::Display for ReadUnderWrite {
 }
 
 /// FIRRTL port direction
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Direction { 
     Input, Output 
 }

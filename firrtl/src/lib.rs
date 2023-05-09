@@ -5,6 +5,8 @@
 mod token;
 mod lex;
 mod parse;
+
+pub mod pass;
 pub mod file;
 pub mod ast;
 
@@ -23,17 +25,11 @@ mod tests {
         use std::io::*;
 
         //let filename = "../parse-basic.fir";
-        let filename = "../chisel-tests/firrtl/GCD.fir";
+        let filename = "../chisel-tests/firrtl/MyAlu.fir";
         let sf = FirrtlFile::from_file(filename);
         let circuit = sf.parse()?;
-
-        //let mut stream = FirrtlStream::new(&sf);
-        //let circuit = FirrtlParser::parse(&mut stream)?;
-        circuit.dump();
         Ok(())
     }
-
-
 }
 
 

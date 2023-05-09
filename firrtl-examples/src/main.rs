@@ -1,8 +1,7 @@
+//! Print the parsed contents of a FIRRTL file
 
 use std::env;
-
 use firrtl::{ FirrtlParseError, FirrtlFile };
-use firrtl::ast::*;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
@@ -17,9 +16,5 @@ fn main() -> Result<(), String> {
     })?;
                                             
     circuit.dump();
-
-
-
-    println!("Hello, world!");
     Ok(())
 }
